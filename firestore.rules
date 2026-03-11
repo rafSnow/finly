@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isFamilyMember(familyId) {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/families/$(familyId)) &&
+        request.auth.uid in
+          get(/databases/$(database)/documents/families/$(familyId))
+            .data.members.map(m, m.userId);
+    }
+
+    function getFamilyRole(familyId) {
+      let members = get(/databases/$(database)/documents/families/$(familyId)).data.members;
+      let matched = members.filter(m, m.userId == request.auth.uid);
+      return matched.size() > 0 ? matched[0].role : null;
+    }
+
+    function isFamilyAdmin(familyId) {
+      return getFamilyRole(familyId) == 'admin';
+    }
+
+    function canEdit(familyId) {
+      return getFamilyRole(familyId) == 'admin' ||
+             getFamilyRole(familyId) == 'editor';
+    }
+
+    // ── Usuários ─────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read:   if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth() && request.auth.uid == userId
+                    && request.resource.data.keys().hasAll(['name', 'email', 'currency', 'createdAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.email is string
+                    && request.resource.data.currency is string;
+      allow update: if isAuth() && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['name', 'photoURL', 'currency']);
+      allow delete: if false;
+    }
+
+    // ── Famílias ──────────────────────────────────────────────────
+    match /families/{familyId} {
+      allow read:   if isFamilyMember(familyId);
+      allow create: if isAuth();
+      allow update: if isFamilyAdmin(familyId);
+      allow delete: if false;
+
+      // Subcoleções
+      match /accounts/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+      match /transactions/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+      match /cards/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+      match /budgets/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+      match /goals/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+      match /auditLogs/{docId} {
+        allow read:   if isFamilyAdmin(familyId);
+        allow write:  if false;
+      }
+      match /recurrences/{docId} {
+        allow read:   if isFamilyMember(familyId);
+        allow write:  if canEdit(familyId);
+      }
+    }
+
+    // ── Categorias globais ────────────────────────────────────────
+    match /categories/{categoryId} {
+      allow read:  if isAuth();
+      allow write: if false;
+    }
+  }
+}
