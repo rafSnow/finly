@@ -1,6 +1,0 @@
-{
-  "projects": {
-    "default": "finly-dev",
-    "production": "finly-prod"
-  }
-}
