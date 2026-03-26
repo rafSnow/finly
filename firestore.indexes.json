@@ -1,0 +1,37 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "entries",
+      "queryScope": "Collection",
+      "fields": [
+        {
+          "fieldPath": "familyId",
+          "order": "Ascending"
+        },
+        {
+          "fieldPath": "date",
+          "order": "Descending"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "entries",
+      "queryScope": "Collection",
+      "fields": [
+        {
+          "fieldPath": "familyId",
+          "order": "Ascending"
+        },
+        {
+          "fieldPath": "categoryId",
+          "order": "Ascending"
+        },
+        {
+          "fieldPath": "date",
+          "order": "Descending"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
