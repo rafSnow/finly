@@ -1,7 +1,11 @@
 import { auth, db } from "@/lib/firebase";
+import { deleteAllUserData } from "@/lib/firestore/deleteAccount";
 import { Family, User } from "@/types";
 import {
+  AuthError,
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -11,13 +15,16 @@ import {
 import {
   collection,
   doc,
-  getDocs,
-  query,
+  getDoc,
+  serverTimestamp,
   setDoc,
-  where,
 } from "firebase/firestore";
 import Cookies from "js-cookie";
 import { useEffect, useState } from "react";
+
+function isAuthError(error: unknown): error is AuthError {
+  return typeof error === "object" && error !== null && "code" in error;
+}
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,33 +33,45 @@ export function useAuth() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const token = await firebaseUser.getIdToken();
-        Cookies.set("firebase-token", token, { expires: 7 });
+      try {
+        if (firebaseUser) {
+          const token = await firebaseUser.getIdToken();
+          Cookies.set("firebase-token", token, { expires: 7 });
 
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email!,
-          displayName: firebaseUser.displayName,
-        });
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email!,
+            displayName: firebaseUser.displayName,
+          });
 
-        const q = query(
-          collection(db, "families"),
-          where("memberIds", "array-contains", firebaseUser.uid),
-        );
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const docData = querySnapshot.docs[0];
-          setFamily({ id: docData.id, ...docData.data() } as Family);
+          const userSnapshot = await getDoc(doc(db, "users", firebaseUser.uid));
+          const userData = userSnapshot.exists()
+            ? (userSnapshot.data() as { familyId?: string })
+            : null;
+
+          if (!userData?.familyId) {
+            setFamily(null);
+            return;
+          }
+
+          const familySnapshot = await getDoc(doc(db, "families", userData.familyId));
+          if (!familySnapshot.exists()) {
+            setFamily(null);
+            return;
+          }
+
+          setFamily({ id: familySnapshot.id, ...familySnapshot.data() } as Family);
         } else {
+          Cookies.remove("firebase-token");
+          setUser(null);
           setFamily(null);
         }
-      } else {
-        Cookies.remove("firebase-token");
-        setUser(null);
+      } catch (error) {
+        console.error("Erro ao carregar estado de autenticacao:", error);
         setFamily(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -60,6 +79,53 @@ export function useAuth() {
 
   const signIn = (email: string, pass: string) =>
     signInWithEmailAndPassword(auth, email, pass);
+
+  const signInWithGoogle = async (): Promise<void> => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const credential = await signInWithPopup(auth, provider);
+      const signedUser = credential.user;
+      const idToken = await signedUser.getIdToken();
+      Cookies.set("firebase-token", idToken, { expires: 7 });
+
+      const userRef = doc(db, "users", signedUser.uid);
+      const userSnapshot = await getDoc(userRef);
+      const existingUserData = userSnapshot.exists()
+        ? (userSnapshot.data() as { familyId?: string })
+        : null;
+
+      if (!existingUserData?.familyId) {
+        const familyRef = doc(collection(db, "families"));
+        await setDoc(familyRef, {
+          memberIds: [signedUser.uid],
+          createdBy: signedUser.uid,
+          createdAt: serverTimestamp(),
+        });
+
+        await setDoc(
+          userRef,
+          {
+            name: signedUser.displayName ?? "Usuario",
+            email: signedUser.email,
+            familyId: familyRef.id,
+            createdAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+    } catch (error) {
+      if (isAuthError(error)) {
+        if (error.code === "auth/popup-closed-by-user") {
+          throw new Error("popup_closed_by_user");
+        }
+        if (error.code === "auth/account-exists-with-different-credential") {
+          throw new Error("Este e-mail já está cadastrado com outro método de login.");
+        }
+      }
+
+      throw new Error("Nao foi possivel entrar com Google.");
+    }
+  };
 
   const signUp = async (email: string, pass: string, name: string) => {
     const userCredential = await createUserWithEmailAndPassword(
@@ -69,30 +135,51 @@ export function useAuth() {
     );
     const newUser = userCredential.user;
 
-    // Atualiza o perfil no Auth
-    await updateProfile(newUser, { displayName: name });
+    // Operações de pós-cadastro não devem invalidar criação do usuário no Auth.
+    try {
+      await updateProfile(newUser, { displayName: name });
 
-    // Cria o documento do usuário no Firestore
-    await setDoc(doc(db, "users", newUser.uid), {
-      name,
-      email,
-      createdAt: new Date(),
-    });
+      const familyRef = doc(collection(db, "families"));
+      await setDoc(familyRef, {
+        memberIds: [newUser.uid],
+        createdBy: newUser.uid,
+        createdAt: serverTimestamp(),
+      });
 
-    // Cria uma família inicial para o novo usuário
-    const familyRef = doc(collection(db, "families"));
-    await setDoc(familyRef, {
-      memberIds: [newUser.uid],
-      createdBy: newUser.uid,
-      createdAt: new Date(),
-    });
+      await setDoc(doc(db, "users", newUser.uid), {
+        name,
+        email,
+        familyId: familyRef.id,
+        createdAt: serverTimestamp(),
+      });
+    } catch (postSignUpError) {
+      console.error("Post-signup setup failed:", postSignUpError);
+    }
 
     return userCredential;
   };
 
   const signOut = () => firebaseSignOut(auth);
 
+  const deleteAccount = async (password: string): Promise<void> => {
+    if (!user?.uid || !family?.id) {
+      throw new Error("Nao foi possivel localizar os dados da conta para exclusao.");
+    }
+
+    await deleteAllUserData(user.uid, family.id, password);
+  };
+
   const resetPassword = (email: string) => sendPasswordResetEmail(auth, email);
 
-  return { user, family, loading, signIn, signUp, signOut, resetPassword };
+  return {
+    user,
+    family,
+    loading,
+    signIn,
+    signUp,
+    signInWithGoogle,
+    signOut,
+    deleteAccount,
+    resetPassword,
+  };
 }

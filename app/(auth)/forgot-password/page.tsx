@@ -25,7 +25,7 @@ export default function ForgotPassword() {
       setMessage(
         "Se este e-mail estiver cadastrado, você receberá as instruções em breve.",
       );
-    } catch (err: any) {
+    } catch {
       setError("Ocorreu um erro ao tentar recuperar a senha.");
     } finally {
       setLoading(false);
@@ -33,17 +33,18 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
+    <div className="min-h-screen bg-[#0A0A0F] bg-[radial-gradient(ellipse_at_top,_#1E1040_0%,_#0A0A0F_60%)] flex items-center justify-center px-5">
+      <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111118] p-8 shadow-[0_8px_48px_rgba(0,0,0,0.7)]">
+        <h1 className="mb-1 text-center text-2xl font-bold tracking-tight text-[#F1F0FF]">
           Recuperar Senha
         </h1>
+        <p className="mb-7 text-center text-sm text-[#6B6890]">Enviaremos instrucoes para redefinir o acesso</p>
 
         {error && (
-          <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
+          <p className="mb-4 text-center text-sm text-red-400">{error}</p>
         )}
         {message && (
-          <p className="text-green-600 text-sm mb-4 text-center">{message}</p>
+          <p className="mb-4 text-center text-sm text-emerald-400">{message}</p>
         )}
 
         <form onSubmit={handleReset}>
@@ -60,7 +61,10 @@ export default function ForgotPassword() {
         </form>
 
         <div className="mt-6 text-center text-sm">
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link
+            href="/login"
+            className="font-medium text-[#7C3AED] transition-colors duration-200 hover:text-[#8B5CF6]"
+          >
             Voltar ao login
           </Link>
         </div>

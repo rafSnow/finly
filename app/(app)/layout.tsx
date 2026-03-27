@@ -17,16 +17,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0A0F] text-[#A09DC0]">
         Carregando...
       </div>
     );
   if (!user) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 pb-20">
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] pb-20">
       <Header />
-      <main className="flex-1 p-4 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto px-5 py-6 pb-32">{children}</main>
       <BottomNav />
     </div>
   );

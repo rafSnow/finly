@@ -1,4 +1,52 @@
 export type RecurrenceInterval = "weekly" | "monthly" | "yearly";
+export type RecurringScope = "this" | "this_and_following" | "all";
+
+export interface EntryFilters {
+  month: number;
+  year: number;
+  type?: "income" | "expense";
+  categoryId?: string;
+}
+
+export interface CreateEntryInput {
+  type: "income" | "expense";
+  value: number;
+  categoryId: string;
+  date: Date;
+  description?: string;
+}
+
+export interface PeriodFilter {
+  month: number;
+  year: number;
+}
+
+export interface DashboardSummary {
+  totalIncome: number;
+  totalExpense: number;
+  balance: number;
+}
+
+export interface CategoryBreakdown {
+  categoryId: string;
+  categoryName: string;
+  total: number;
+  percentage: number;
+}
+
+export interface PartnerSummary {
+  uid: string;
+  name: string;
+  totalIncome: number;
+  totalExpense: number;
+  expenseContribution: number;
+}
+
+export interface CreateGoalInput {
+  categoryId: string;
+  limit: number;
+  period: "monthly";
+}
 
 export interface User {
   uid: string;
@@ -49,6 +97,8 @@ export interface Goal {
 export interface Invite {
   id: string;
   fromUid: string;
+  fromName?: string;
+  fromEmail?: string;
   toEmail: string;
   familyId: string;
   status: "pending" | "accepted" | "expired";

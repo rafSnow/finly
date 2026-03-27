@@ -1,83 +1,106 @@
-import { db } from "@/lib/firebase";
-import { Goal } from "@/types";
+"use client";
+
+import { useAuth } from "@/hooks/useAuth";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  updateDoc,
-} from "firebase/firestore";
+  createGoal as createGoalService,
+  deleteGoal as deleteGoalService,
+  getGoals,
+  updateGoal as updateGoalService,
+} from "@/lib/firestore/goals";
+import { CreateGoalInput, Goal } from "@/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-/**
- * Cria uma nova meta de gastos.
- * @param familyId - ID da família
- * @param goal - Dados da meta (sem id)
- * @returns Promise com o ID da meta criada
- */
-export async function createGoal(
-  familyId: string,
-  goal: Omit<Goal, "id">
-): Promise<string> {
-  try {
-    const docRef = await addDoc(collection(db, "families", familyId, "goals"), goal);
-    return docRef.id;
-  } catch (error) {
-    console.error("Erro ao criar meta:", error);
-    throw error;
-  }
-}
+export function useGoals() {
+  const { family, loading: authLoading } = useAuth();
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-/**
- * Busca todas as metas de uma família.
- * @param familyId - ID da família
- * @returns Promise com array de metas
- */
-export async function getGoalsByFamily(familyId: string): Promise<Goal[]> {
-  try {
-    const snapshot = await getDocs(
-      collection(db, "families", familyId, "goals")
-    );
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Goal));
-  } catch (error) {
-    console.error("Erro ao buscar metas:", error);
-    return [];
-  }
-}
+  const familyId = family?.id;
 
-/**
- * Atualiza uma meta.
- * @param familyId - ID da família
- * @param goalId - ID da meta
- * @param updates - Campos a atualizar
- */
-export async function updateGoal(
-  familyId: string,
-  goalId: string,
-  updates: Partial<Goal>
-): Promise<void> {
-  try {
-    const docRef = doc(db, "families", familyId, "goals", goalId);
-    await updateDoc(docRef, updates);
-  } catch (error) {
-    console.error("Erro ao atualizar meta:", error);
-    throw error;
-  }
-}
+  const loadGoals = useCallback(async () => {
+    if (authLoading) {
+      return;
+    }
 
-/**
- * Deleta uma meta.
- * @param familyId - ID da família
- * @param goalId - ID da meta
- */
-export async function deleteGoal(
-  familyId: string,
-  goalId: string
-): Promise<void> {
-  try {
-    await deleteDoc(doc(db, "families", familyId, "goals", goalId));
-  } catch (error) {
-    console.error("Erro ao deletar meta:", error);
-    throw error;
-  }
+    if (!familyId) {
+      setGoals([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const list = await getGoals(familyId);
+      setGoals(list);
+    } catch {
+      setError("Nao foi possivel carregar as metas.");
+      setGoals([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [authLoading, familyId]);
+
+  useEffect(() => {
+    loadGoals();
+  }, [loadGoals]);
+
+  const hasDuplicateCategory = useMemo(
+    () => (categoryId: string, excludingGoalId?: string) =>
+      goals.some(
+        (goal) =>
+          goal.categoryId === categoryId &&
+          (!excludingGoalId || goal.id !== excludingGoalId),
+      ),
+    [goals],
+  );
+
+  const createGoal = async (input: CreateGoalInput) => {
+    if (!familyId) {
+      throw new Error("Familia nao encontrada.");
+    }
+    if (hasDuplicateCategory(input.categoryId)) {
+      throw new Error("Ja existe uma meta para essa categoria.");
+    }
+
+    await createGoalService(familyId, input);
+    await loadGoals();
+  };
+
+  const updateGoal = async (goalId: string, updates: Partial<Goal>) => {
+    if (!familyId) {
+      throw new Error("Familia nao encontrada.");
+    }
+
+    if (
+      updates.categoryId &&
+      hasDuplicateCategory(updates.categoryId, goalId)
+    ) {
+      throw new Error("Ja existe uma meta para essa categoria.");
+    }
+
+    await updateGoalService(familyId, goalId, updates);
+    await loadGoals();
+  };
+
+  const deleteGoal = async (goalId: string) => {
+    if (!familyId) {
+      throw new Error("Familia nao encontrada.");
+    }
+
+    await deleteGoalService(familyId, goalId);
+    await loadGoals();
+  };
+
+  return {
+    goals,
+    loading,
+    error,
+    createGoal,
+    updateGoal,
+    deleteGoal,
+    refresh: loadGoals,
+  };
 }

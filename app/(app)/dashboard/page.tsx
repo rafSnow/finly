@@ -1,10 +1,108 @@
+"use client";
+
+import { CategoryChart } from "@/components/dashboard/CategoryChart";
+import { GoalProgressList } from "@/components/dashboard/GoalProgressList";
+import { PartnerBreakdown } from "@/components/dashboard/PartnerBreakdown";
+import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
+import { SummaryCards } from "@/components/dashboard/SummaryCards";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useDashboard } from "@/hooks/useDashboard";
+import { useGoals } from "@/hooks/useGoals";
+import { getCategories } from "@/lib/firestore/categories";
+import { Category, PeriodFilter } from "@/types";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+
 export default function Dashboard() {
+  const { family } = useAuth();
+
+  const now = new Date();
+  const [period, setPeriod] = useState<PeriodFilter>({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  const { summary, categoryBreakdown, partnerSummaries, loading, error } =
+    useDashboard(period);
+  const { goals, loading: goalsLoading } = useGoals();
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      if (!family?.id) {
+        setCategories([]);
+        setCategoriesLoading(false);
+        return;
+      }
+
+      setCategoriesLoading(true);
+      try {
+        const list = await getCategories(family.id);
+        setCategories(list);
+      } catch {
+        setCategories([]);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    loadCategories();
+  }, [family?.id]);
+
+  const categoryNameMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
+
+  const goalProgress = useMemo(
+    () =>
+      goals.map((goal) => {
+        const categoryData = categoryBreakdown.find(
+          (item) => item.categoryId === goal.categoryId,
+        );
+        const spent = categoryData?.total ?? 0;
+
+        return {
+          goal,
+          categoryName: categoryNameMap.get(goal.categoryId) ?? "Categoria",
+          spent,
+          progress: goal.limit > 0 ? (spent / goal.limit) * 100 : 0,
+        };
+      }),
+    [categoryBreakdown, categoryNameMap, goals],
+  );
+
+  const isLoading = loading || goalsLoading || categoriesLoading;
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-full">
-      <h1 className="text-4xl font-bold text-gray-800 mb-4">Dashboard</h1>
-      <p className="text-gray-600 text-lg">
-        Resumo financeiro será exibido aqui (Sprint 2)
-      </p>
+    <div className="space-y-4 pb-24">
+      <h2 className="text-lg font-semibold text-[#F1F0FF]">Dashboard</h2>
+
+      <PeriodSelector value={period} onChange={setPeriod} />
+
+      {isLoading ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Skeleton variant="card" height="h-20" />
+            <Skeleton variant="card" height="h-20" />
+            <Skeleton variant="card" height="h-20" />
+          </div>
+          <Skeleton variant="card" height="h-56" />
+          <Skeleton variant="line" height="h-5" />
+          <Skeleton variant="line" height="h-5" />
+        </div>
+      ) : null}
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {!isLoading ? (
+        <>
+          <SummaryCards summary={summary} />
+          <CategoryChart data={categoryBreakdown} />
+          <GoalProgressList items={goalProgress} />
+          <PartnerBreakdown data={partnerSummaries} />
+        </>
+      ) : null}
     </div>
   );
 }

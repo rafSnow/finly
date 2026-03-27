@@ -1,8 +1,266 @@
+"use client";
+
+import { Button } from "@/components/ui/Button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Select } from "@/components/ui/Select";
+import { useAuth } from "@/hooks/useAuth";
+import { useGoals } from "@/hooks/useGoals";
+import { useToast } from "@/hooks/useToast";
+import { getCategories } from "@/lib/firestore/categories";
+import { formatCurrency } from "@/lib/utils/format";
+import { Category, Goal } from "@/types";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
 export default function Metas() {
+  const { family } = useAuth();
+  const { showToast } = useToast();
+  const { goals, loading, error, createGoal, updateGoal, deleteGoal } = useGoals();
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [categoryId, setCategoryId] = useState("");
+  const [limit, setLimit] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      if (!family?.id) {
+        setCategories([]);
+        setCategoriesLoading(false);
+        return;
+      }
+
+      setCategoriesLoading(true);
+      try {
+        const list = await getCategories(family.id);
+        setCategories(list.filter((category) => category.type !== "income"));
+      } catch {
+        setCategories([]);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    loadCategories();
+  }, [family?.id]);
+
+  const categoryNameMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
+
+  const openCreateModal = () => {
+    setEditingGoal(null);
+    setCategoryId("");
+    setLimit("");
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (goal: Goal) => {
+    setEditingGoal(goal);
+    setCategoryId(goal.categoryId);
+    setLimit(String(goal.limit));
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    if (submitting) {
+      return;
+    }
+    setIsModalOpen(false);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const parsedLimit = Number(limit);
+    if (!categoryId) {
+      setFormError("Selecione uma categoria.");
+      return;
+    }
+    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+      setFormError("Informe um valor de limite valido.");
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError(null);
+
+    try {
+      if (editingGoal) {
+        await updateGoal(editingGoal.id, {
+          categoryId,
+          limit: parsedLimit,
+          period: "monthly",
+        });
+        showToast("Meta salva com sucesso", "success");
+      } else {
+        await createGoal({
+          categoryId,
+          limit: parsedLimit,
+          period: "monthly",
+        });
+        showToast("Meta salva com sucesso", "success");
+      }
+
+      setIsModalOpen(false);
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Erro ao salvar meta.";
+      setFormError(message);
+      showToast(message, "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingGoalId) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deleteGoal(deletingGoalId);
+      showToast("Meta excluida", "success");
+      setDeletingGoalId(null);
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Nao foi possivel excluir a meta.";
+      showToast(message, "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800">Metas</h2>
-      <p className="text-gray-600 mt-2">Tela em construção (Sprint 5).</p>
+    <div className="space-y-4 pb-24">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-[#F1F0FF]">Metas</h2>
+        <button
+          type="button"
+          onClick={openCreateModal}
+          className="rounded-xl bg-[#7C3AED] px-5 py-3 font-semibold text-white transition-all duration-200 hover:bg-[#6D28D9] active:scale-[0.98]"
+        >
+          Nova meta
+        </button>
+      </div>
+
+      {loading || categoriesLoading ? (
+        <div className="space-y-3">
+          <Skeleton variant="card" height="h-24" />
+          <Skeleton variant="card" height="h-24" />
+        </div>
+      ) : null}
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+      {!loading && goals.length === 0 ? (
+        <EmptyState
+          title="Nenhuma meta cadastrada ainda"
+          description="Crie uma meta mensal por categoria"
+          action={{
+            label: "Nova meta",
+            onClick: openCreateModal,
+          }}
+        />
+      ) : null}
+
+      {!loading && goals.length > 0 ? (
+        <div>
+          {goals.map((goal) => (
+            <div
+              key={goal.id}
+              className="mb-3 rounded-2xl border border-white/[0.07] bg-[#111118] p-4"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-semibold text-[#F1F0FF]">
+                {categoryNameMap.get(goal.categoryId) ?? "Categoria"}
+                </p>
+                <span className="rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#8B5CF6]">
+                  Mensal
+                </span>
+              </div>
+              <p className="text-lg font-bold text-[#F1F0FF]">
+                {formatCurrency(goal.limit)}
+                <span className="text-sm font-normal text-[#6B6890]">/mes</span>
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button variant="secondary" onClick={() => openEditModal(goal)}>
+                  Editar
+                </Button>
+                <Button variant="danger" onClick={() => setDeletingGoalId(goal.id)}>
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title={editingGoal ? "Editar meta" : "Nova meta"}
+      >
+        <form onSubmit={handleSubmit}>
+          <Select
+            label="Categoria"
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+            options={[
+              { value: "", label: "Selecione" },
+              ...categories.map((category) => ({
+                value: category.id,
+                label: category.name,
+              })),
+            ]}
+          />
+
+          <Input
+            label="Limite mensal"
+            type="number"
+            min={0}
+            step="0.01"
+            value={limit}
+            onChange={(event) => setLimit(event.target.value)}
+          />
+
+          {formError ? <p className="mb-3 text-sm text-red-400">{formError}</p> : null}
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="submit" loading={submitting}>
+              Salvar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={submitting}
+              onClick={closeModal}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal
+        open={Boolean(deletingGoalId)}
+        title="Excluir meta"
+        description="Deseja excluir esta meta?"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeletingGoalId(null)}
+      />
     </div>
   );
 }
