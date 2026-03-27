@@ -1,6 +1,6 @@
-const CACHE_NAME = "finly-v1";
+const CACHE_NAME = "finly-v2";
 const APP_SHELL = [
-  "/",
+  "/login",
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
@@ -28,27 +28,68 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+  const { request } = event;
+
+  if (request.method !== "GET") {
+    return;
+  }
+
+  // Avoid Chromium-only-if-cached runtime error for cross-origin requests.
+  if (request.cache === "only-if-cached" && request.mode !== "same-origin") {
+    return;
+  }
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(async () => {
+          const cachedLogin = await caches.match("/login");
+          if (cachedLogin) {
+            return cachedLogin;
+          }
+
+          const cachedRoot = await caches.match("/");
+          if (cachedRoot) {
+            return cachedRoot;
+          }
+
+          return new Response("Offline", {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: { "Content-Type": "text/plain" },
+          });
+        })
+    );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(request).then((cached) => {
       if (cached) {
         return cached;
       }
 
-      return fetch(event.request)
+      return fetch(request)
         .then((response) => {
           if (!response || response.status !== 200 || response.type !== "basic") {
             return response;
           }
 
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           return response;
         })
-        .catch(() => caches.match("/"));
+        .catch(() => cached);
     })
   );
 });

@@ -1,8 +1,9 @@
 {
+  "id": "/",
   "name": "Finly",
   "short_name": "Finly",
   "description": "Controle financeiro do casal com visão compartilhada e metas.",
-  "start_url": "/",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#0A0A0F",
   "theme_color": "#0A0A0F",
