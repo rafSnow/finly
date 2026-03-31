@@ -237,7 +237,7 @@ export function EntryForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-6 pb-32">
+    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-6">
       <div className="mb-6 grid grid-cols-2 rounded-xl bg-[#1A1A26] p-1">
           <button
             type="button"
@@ -335,7 +335,7 @@ export function EntryForm({
         ) : null}
 
         {canConfigureRecurrence && isRecurring ? (
-          <div className="mt-3 space-y-3 rounded-xl border border-white/[0.06] bg-[#1A1A26] p-4">
+          <div className="mt-3 space-y-3 rounded-xl border border-white/6 bg-[#1A1A26] p-4">
           <Select
             label="Intervalo"
             value={recurrenceInterval}
@@ -362,7 +362,7 @@ export function EntryForm({
         ) : null}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 flex gap-3 border-t border-white/[0.07] bg-[#0A0A0F]/90 px-5 py-4 pb-safe backdrop-blur-md">
+      <div className="mt-4 grid grid-cols-2 gap-2">
         <Button type="submit" loading={saving}>
           {submitLabel}
         </Button>
