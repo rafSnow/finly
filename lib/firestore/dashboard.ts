@@ -88,32 +88,55 @@ async function getCategoriesMap(
 async function getFamilyMemberProfiles(
   familyId: string,
 ): Promise<Array<{ uid: string; name: string }>> {
-  const familySnapshot = await getDoc(doc(db, "families", familyId));
-  if (!familySnapshot.exists()) {
-    return [];
-  }
-
-  const familyData = familySnapshot.data() as { memberIds?: string[] };
-  const memberIds = familyData.memberIds ?? [];
-  if (memberIds.length === 0) {
-    return [];
-  }
-
-  const userDocs = await Promise.all(
-    memberIds.map((uid) => getDoc(doc(db, "users", uid))),
-  );
-
-  return userDocs.map((userDoc, index) => {
-    const fallbackName = `Usuário ${index + 1}`;
-    if (!userDoc.exists()) {
-      return { uid: memberIds[index], name: fallbackName };
+  try {
+    console.log("📖 [dashboard] Buscando membros da família:", familyId);
+    const familySnapshot = await getDoc(doc(db, "families", familyId));
+    console.log("✅ [dashboard] Family snapshot recebido", { familyId, exists: familySnapshot.exists() });
+    
+    if (!familySnapshot.exists()) {
+      console.log("⚠️ [dashboard] Family não existe", familyId);
+      return [];
     }
-    const data = userDoc.data() as { name?: string };
-    return {
-      uid: memberIds[index],
-      name: data.name ?? fallbackName,
-    };
-  });
+
+    const familyData = familySnapshot.data() as { memberIds?: string[] };
+    const memberIds = familyData.memberIds ?? [];
+    console.log("📊 [dashboard] IDs de membros encontrados:", { familyId, memberCount: memberIds.length, memberIds });
+    
+    if (memberIds.length === 0) {
+      return [];
+    }
+
+    console.log("📖 [dashboard] Buscando perfis dos membros...");
+    const userDocs = await Promise.all(
+      memberIds.map((uid) => {
+        console.log("  📖 Buscando usuário:", uid);
+        return getDoc(doc(db, "users", uid));
+      }),
+    );
+    console.log("✅ [dashboard] Perfis dos membros recebidos");
+
+    return userDocs.map((userDoc, index) => {
+      const fallbackName = `Usuário ${index + 1}`;
+      if (!userDoc.exists()) {
+        console.log(`  ⚠️ Usuário ${memberIds[index]} não existe`);
+        return { uid: memberIds[index], name: fallbackName };
+      }
+      const data = userDoc.data() as { name?: string };
+      const name = data.name ?? fallbackName;
+      console.log(`  ✅ Usuário ${memberIds[index]}: ${name}`);
+      return {
+        uid: memberIds[index],
+        name
+      };
+    });
+  } catch (error) {
+    console.error("❌ [dashboard] Erro ao buscar perfis dos membros:", {
+      error,
+      familyId,
+      message: error instanceof Error ? error.message : "Unknown"
+    });
+    throw error;
+  }
 }
 
 export async function getSummary(
@@ -187,12 +210,20 @@ export async function getPartnerSummaries(
   filters: PeriodFilter,
 ): Promise<PartnerSummary[]> {
   try {
+    console.log("📊 [dashboard] Iniciando busca de resumo dos parceiros", { familyId });
+    
     const [entries, memberProfiles] = await Promise.all([
       getPeriodEntries(familyId, filters),
       getFamilyMemberProfiles(familyId),
     ]);
 
+    console.log("✅ [dashboard] Dados carregados", { 
+      entryCount: entries.length, 
+      memberCount: memberProfiles.length 
+    });
+
     if (memberProfiles.length === 0) {
+      console.log("⚠️ [dashboard] Nenhum membro encontrado");
       return [];
     }
 
@@ -200,7 +231,9 @@ export async function getPartnerSummaries(
       .filter((entry) => entry.type === "expense")
       .reduce((sum, entry) => sum + entry.value, 0);
 
-    return memberProfiles.map((member) => {
+    console.log("📊 [dashboard] Despesa total:", totalExpense);
+
+    const summaries = memberProfiles.map((member) => {
       const memberEntries = entries.filter((entry) => entry.ownerId === member.uid);
       const totalIncome = memberEntries
         .filter((entry) => entry.type === "income")
@@ -209,7 +242,7 @@ export async function getPartnerSummaries(
         .filter((entry) => entry.type === "expense")
         .reduce((sum, entry) => sum + entry.value, 0);
 
-      return {
+      const summary = {
         uid: member.uid,
         name: member.name,
         totalIncome,
@@ -217,9 +250,19 @@ export async function getPartnerSummaries(
         expenseContribution:
           totalExpense > 0 ? (memberExpense / totalExpense) * 100 : 0,
       };
+      
+      console.log(`  📊 ${member.name}:`, summary);
+      return summary;
     });
+    
+    console.log("✅ [dashboard] Resumo dos parceiros concluído");
+    return summaries;
   } catch (error) {
-    console.error("Erro ao buscar resumo individual dos parceiros:", error);
+    console.error("❌ [dashboard] Erro ao buscar resumo individual dos parceiros:", {
+      error,
+      familyId,
+      message: error instanceof Error ? error.message : "Unknown"
+    });
     throw error;
   }
 }

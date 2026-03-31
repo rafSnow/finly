@@ -5,11 +5,6 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
- 
-    function isFamilyMember(familyId) {
-      return isAuthenticated() && request.auth.uid in
-        get(/databases/$(database)/documents/families/$(familyId)).data.memberIds;
-    }
 
     function isOwner(uid) {
       return isAuthenticated() && request.auth.uid == uid;
@@ -22,6 +17,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId
           == get(/databases/$(database)/documents/users/$(userId)).data.familyId;
+    }
+
+    function isFamilyMember(familyId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/families/$(familyId)).data.memberIds.hasAny([request.auth.uid]);
     }
 
     // Usuários
@@ -37,13 +37,20 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.memberIds
         && request.resource.data.memberIds.size() <= 2;
       allow update: if isFamilyMember(familyId)
-        && request.resource.data.memberIds.size() <= 2;
+        || (
+          isAuthenticated()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(["memberIds"])
+          && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+          && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+          && request.resource.data.memberIds.hasAny([request.auth.uid])
+          && !resource.data.memberIds.hasAny([request.auth.uid])
+          && request.resource.data.memberIds.size() <= 2
+        );
       allow delete: if isFamilyMember(familyId);
 
       match /entries/{entryId} {
         allow read, create: if isFamilyMember(familyId);
-        allow update, delete: if isFamilyMember(familyId)
-          && resource.data.ownerId == request.auth.uid;
+        allow update, delete: if isFamilyMember(familyId) && resource.data.ownerId == request.auth.uid;
       }
 
       match /categories/{categoryId} {

@@ -5,6 +5,7 @@ import {
   AuthError,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  signInWithRedirect,
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -34,47 +35,94 @@ export function useAuth() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
+        console.log("🔐 [useAuth] onAuthStateChanged triggered", firebaseUser?.uid);
+        
         if (firebaseUser) {
-          const token = await firebaseUser.getIdToken();
-          Cookies.set("firebase-token", token, { expires: 7 });
+          try {
+            const token = await firebaseUser.getIdToken();
+            console.log("✅ [useAuth] Token obtido:", firebaseUser.uid);
+            Cookies.set("firebase-token", token, { expires: 7 });
 
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email!,
-            displayName: firebaseUser.displayName,
-          });
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email!,
+              displayName: firebaseUser.displayName,
+            });
+            console.log("✅ [useAuth] User state atualizado");
 
-          const userSnapshot = await getDoc(doc(db, "users", firebaseUser.uid));
-          const userData = userSnapshot.exists()
-            ? (userSnapshot.data() as { familyId?: string })
-            : null;
+            try {
+              console.log("📖 [useAuth] Lendo documento de usuário:", firebaseUser.uid);
+              const userSnapshot = await getDoc(doc(db, "users", firebaseUser.uid));
+              console.log("✅ [useAuth] Snapshot recebido, exists:", userSnapshot.exists());
+              
+              const userData = userSnapshot.exists()
+                ? (userSnapshot.data() as { familyId?: string })
+                : null;
+              
+              console.log("📊 [useAuth] Dados do usuário:", { 
+                exists: userSnapshot.exists(), 
+                hasData: !!userData,
+                familyId: userData?.familyId 
+              });
 
-          if (!userData?.familyId) {
-            setFamily(null);
-            return;
+              if (!userData?.familyId) {
+                console.log("⚠️ [useAuth] Usuário não tem familyId");
+                setFamily(null);
+                setLoading(false);
+                return;
+              }
+
+              console.log("📖 [useAuth] Lendo documento de família:", userData.familyId);
+              const familySnapshot = await getDoc(doc(db, "families", userData.familyId));
+              console.log("✅ [useAuth] Snapshot da família recebido, exists:", familySnapshot.exists());
+              
+              if (!familySnapshot.exists()) {
+                console.log("⚠️ [useAuth] Documento da família não existe");
+                setFamily(null);
+                setLoading(false);
+                return;
+              }
+
+              const familyData = { id: familySnapshot.id, ...familySnapshot.data() } as Family;
+              console.log("✅ [useAuth] Família carregada:", familyData.id);
+              setFamily(familyData);
+            } catch (firestoreError) {
+              console.error("❌ [useAuth] Erro ao carregar dados do Firestore:", {
+                error: firestoreError,
+                message: firestoreError instanceof Error ? firestoreError.message : "Unknown",
+                code: firestoreError && typeof firestoreError === 'object' ? (firestoreError as any).code : "No code",
+                uid: firebaseUser.uid
+              });
+              setFamily(null);
+              // Não quebrar a autenticação se o Firestore falhar
+            } finally {
+              setLoading(false);
+            }
+          } catch (tokenError) {
+            console.error("❌ [useAuth] Erro ao obter token:", tokenError);
+            setLoading(false);
           }
-
-          const familySnapshot = await getDoc(doc(db, "families", userData.familyId));
-          if (!familySnapshot.exists()) {
-            setFamily(null);
-            return;
-          }
-
-          setFamily({ id: familySnapshot.id, ...familySnapshot.data() } as Family);
         } else {
+          console.log("🔓 [useAuth] Usuário deslogged");
           Cookies.remove("firebase-token");
           setUser(null);
           setFamily(null);
+          setLoading(false);
         }
       } catch (error) {
-        console.error("Erro ao carregar estado de autenticacao:", error);
+        console.error("❌ [useAuth] Erro ao carregar estado de autenticacao:", {
+          error,
+          message: error instanceof Error ? error.message : "Unknown"
+        });
         setFamily(null);
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      console.log("🛑 [useAuth] Cleanup - unsubscribing from auth state");
+      unsubscribe();
+    };
   }, []);
 
   const signIn = (email: string, pass: string) =>
@@ -115,6 +163,11 @@ export function useAuth() {
       }
     } catch (error) {
       if (isAuthError(error)) {
+        if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
+          const provider = new GoogleAuthProvider();
+          await signInWithRedirect(auth, provider);
+          return;
+        }
         if (error.code === "auth/popup-closed-by-user") {
           throw new Error("popup_closed_by_user");
         }

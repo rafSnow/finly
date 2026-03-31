@@ -33,8 +33,8 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] bg-[radial-gradient(ellipse_at_top,_#1E1040_0%,_#0A0A0F_60%)] flex items-center justify-center px-5">
-      <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111118] p-8 shadow-[0_8px_48px_rgba(0,0,0,0.7)]">
+    <div className="min-h-screen bg-[#0A0A0F] bg-[radial-gradient(ellipse_at_top,#1E1040_0%,#0A0A0F_60%)] flex items-center justify-center px-5">
+      <div className="w-full max-w-sm rounded-2xl border border-white/8 bg-[#111118] p-8 shadow-[0_8px_48px_rgba(0,0,0,0.7)]">
         <h1 className="mb-1 text-center text-2xl font-bold tracking-tight text-[#F1F0FF]">
           Recuperar Senha
         </h1>

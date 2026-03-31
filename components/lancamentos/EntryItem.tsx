@@ -53,7 +53,7 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
         >
           ⋮
         </summary>
-        <div className="absolute right-0 z-10 mt-1 w-32 rounded-xl border border-white/[0.1] bg-[#1A1A26] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+        <div className="absolute right-0 z-10 mt-1 w-32 rounded-xl border border-white/10 bg-[#1A1A26] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
           <button
             type="button"
             onClick={() => onEdit(entry)}

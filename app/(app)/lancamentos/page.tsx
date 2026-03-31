@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/useToast";
 import { getCategories } from "@/lib/firestore/categories";
 import { formatMonthYear } from "@/lib/utils/format";
 import { Category, Entry, EntryFilters, RecurringScope } from "@/types";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -142,14 +141,23 @@ export default function Lancamentos() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h2 className="text-lg font-semibold text-[#F1F0FF]">Lançamentos</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-[#F1F0FF]">Lançamentos</h2>
+        <Button
+          type="button"
+          onClick={() => router.push("/lancamentos/novo")}
+          className="w-auto px-4 py-2"
+        >
+          Novo lançamento
+        </Button>
+      </div>
 
       <div className="mb-5 space-y-4 rounded-2xl border border-white/[0.07] bg-[#111118] p-4">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={goPreviousMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-[#1A1A26] text-[#A09DC0] transition-all duration-200 hover:bg-[#22223A] hover:text-[#F1F0FF]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 bg-[#1A1A26] text-[#A09DC0] transition-all duration-200 hover:bg-[#22223A] hover:text-[#F1F0FF]"
             aria-label="Mes anterior"
           >
             &lt;
@@ -160,7 +168,7 @@ export default function Lancamentos() {
           <button
             type="button"
             onClick={goNextMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-[#1A1A26] text-[#A09DC0] transition-all duration-200 hover:bg-[#22223A] hover:text-[#F1F0FF]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 bg-[#1A1A26] text-[#A09DC0] transition-all duration-200 hover:bg-[#22223A] hover:text-[#F1F0FF]"
             aria-label="Proximo mes"
           >
             &gt;
@@ -246,14 +254,6 @@ export default function Lancamentos() {
           onDelete={handleDeleteClick}
         />
       ) : null}
-
-      <Link
-        href="/lancamentos/novo"
-        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#7C3AED] text-3xl leading-none text-white shadow-[0_0_32px_rgba(124,58,237,0.5)] transition-all duration-200 hover:bg-[#6D28D9] active:scale-95"
-        aria-label="Novo lancamento"
-      >
-        +
-      </Link>
 
       <Modal
         isOpen={showDeleteConfirm}

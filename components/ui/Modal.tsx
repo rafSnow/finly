@@ -34,7 +34,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/[0.1] bg-[#111118] p-6 shadow-[0_-8px_48px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom duration-300 sm:max-w-md sm:rounded-2xl sm:shadow-[0_8px_48px_rgba(0,0,0,0.8)]"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-[#111118] p-6 shadow-[0_-8px_48px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom duration-300 sm:max-w-md sm:rounded-2xl sm:shadow-[0_8px_48px_rgba(0,0,0,0.8)]"
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 id={titleId} className="text-lg font-semibold text-[#F1F0FF]">

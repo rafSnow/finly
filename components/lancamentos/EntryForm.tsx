@@ -271,7 +271,7 @@ export function EntryForm({
           const nextValue = parseCurrencyToNumber(event.target.value);
           setValueInput(formatCurrency(nextValue));
         }}
-        className="mb-6 w-full border-b-2 border-white/[0.1] bg-transparent py-3 text-center text-4xl font-bold text-[#F1F0FF] outline-none transition-colors duration-200 focus:border-[#7C3AED]"
+        className="mb-6 w-full border-b-2 border-white/10 bg-transparent py-3 text-center text-4xl font-bold text-[#F1F0FF] outline-none transition-colors duration-200 focus:border-[#7C3AED]"
       />
       {errors.value ? <p className="mb-4 text-center text-sm text-red-400">{errors.value}</p> : null}
 
@@ -307,7 +307,7 @@ export function EntryForm({
           maxLength={200}
           rows={3}
           className={`w-full rounded-xl border bg-[#1A1A26] px-4 py-3 text-[#F1F0FF] outline-none transition-all duration-200 placeholder:text-[#6B6890] focus:border-[#7C3AED] focus:shadow-[0_0_0_3px_rgba(124,58,237,0.2)] ${
-            errors.description ? "border-red-500/60" : "border-white/[0.08]"
+            errors.description ? "border-red-500/60" : "border-white/8"
           }`}
         />
           <div className="mt-1 flex items-center justify-between">

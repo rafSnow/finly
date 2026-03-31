@@ -35,8 +35,12 @@ type PartnerProfile = {
 
 async function getPartnerProfile(uid: string): Promise<PartnerProfile | null> {
   try {
+    console.log("📖 [useFamily] Buscando perfil do parceiro:", uid);
     const userDoc = await getDoc(doc(db, "users", uid));
+    console.log("✅ [useFamily] Perfil do parceiro recebido", { uid, exists: userDoc.exists() });
+    
     if (!userDoc.exists()) {
+      console.log("⚠️ [useFamily] Documento do usuário não existe", uid);
       return null;
     }
 
@@ -47,7 +51,11 @@ async function getPartnerProfile(uid: string): Promise<PartnerProfile | null> {
       email: data.email ?? "",
     };
   } catch (error) {
-    console.error("Erro ao buscar perfil do parceiro:", error);
+    console.error("❌ [useFamily] Erro ao buscar perfil do parceiro:", {
+      error,
+      uid,
+      message: error instanceof Error ? error.message : "Unknown"
+    });
     return null;
   }
 }
