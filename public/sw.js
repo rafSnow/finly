@@ -1,4 +1,4 @@
-const CACHE_NAME = "finly-v2";
+const CACHE_NAME = "finly-v3";
 const APP_SHELL = [
   "/login",
   "/manifest.webmanifest",
@@ -41,6 +41,11 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Never cache Next.js runtime/build assets to avoid stale chunks after deploy.
+  if (url.pathname.startsWith("/_next/")) {
     return;
   }
 

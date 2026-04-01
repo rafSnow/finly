@@ -27,82 +27,98 @@ function isAuthError(error: unknown): error is AuthError {
   return typeof error === "object" && error !== null && "code" in error;
 }
 
+type AuthStoreState = {
+  user: User | null;
+  family: Family | null;
+  loading: boolean;
+};
+
+let authStoreState: AuthStoreState = {
+  user: null,
+  family: null,
+  loading: true,
+};
+
+const authStoreListeners = new Set<() => void>();
+let isAuthObserverInitialized = false;
+
+function updateAuthStore(next: Partial<AuthStoreState>) {
+  authStoreState = { ...authStoreState, ...next };
+  authStoreListeners.forEach((listener) => listener());
+}
+
+function initializeAuthObserver() {
+  if (isAuthObserverInitialized) {
+    return;
+  }
+
+  isAuthObserverInitialized = true;
+
+  onAuthStateChanged(auth, async (firebaseUser) => {
+    try {
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        Cookies.set("firebase-token", token, { expires: 7 });
+
+        updateAuthStore({
+          user: {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email!,
+            displayName: firebaseUser.displayName,
+          },
+        });
+
+        try {
+          const userSnapshot = await getDoc(doc(db, "users", firebaseUser.uid));
+          const userData = userSnapshot.exists()
+            ? (userSnapshot.data() as { familyId?: string })
+            : null;
+
+          if (!userData?.familyId) {
+            updateAuthStore({ family: null, loading: false });
+            return;
+          }
+
+          const familySnapshot = await getDoc(doc(db, "families", userData.familyId));
+          if (!familySnapshot.exists()) {
+            updateAuthStore({ family: null, loading: false });
+            return;
+          }
+
+          updateAuthStore({
+            family: { id: familySnapshot.id, ...familySnapshot.data() } as Family,
+            loading: false,
+          });
+        } catch (firestoreError) {
+          console.error("[useAuth] Erro ao carregar dados do Firestore:", firestoreError);
+          updateAuthStore({ family: null, loading: false });
+        }
+      } else {
+        Cookies.remove("firebase-token");
+        updateAuthStore({ user: null, family: null, loading: false });
+      }
+    } catch (error) {
+      console.error("[useAuth] Erro ao carregar estado de autenticacao:", error);
+      updateAuthStore({ family: null, loading: false });
+    }
+  });
+}
+
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [family, setFamily] = useState<Family | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authState, setAuthState] = useState(authStoreState);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          try {
-            const token = await firebaseUser.getIdToken();
-            Cookies.set("firebase-token", token, { expires: 7 });
+    initializeAuthObserver();
 
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email!,
-              displayName: firebaseUser.displayName,
-            });
+    const listener = () => setAuthState({ ...authStoreState });
+    authStoreListeners.add(listener);
 
-            try {
-              const userSnapshot = await getDoc(doc(db, "users", firebaseUser.uid));
-              
-              const userData = userSnapshot.exists()
-                ? (userSnapshot.data() as { familyId?: string })
-                : null;
-
-              if (!userData?.familyId) {
-                setFamily(null);
-                setLoading(false);
-                return;
-              }
-
-              const familySnapshot = await getDoc(doc(db, "families", userData.familyId));
-              
-              if (!familySnapshot.exists()) {
-                setFamily(null);
-                setLoading(false);
-                return;
-              }
-
-              const familyData = { id: familySnapshot.id, ...familySnapshot.data() } as Family;
-              setFamily(familyData);
-            } catch (firestoreError) {
-              console.error("[useAuth] Erro ao carregar dados do Firestore:", {
-                error: firestoreError,
-                message: firestoreError instanceof Error ? firestoreError.message : "Unknown",
-                code: firestoreError && typeof firestoreError === 'object' ? (firestoreError as any).code : "No code",
-                uid: firebaseUser.uid
-              });
-              setFamily(null);
-              // Não quebrar a autenticação se o Firestore falhar
-            } finally {
-              setLoading(false);
-            }
-          } catch (tokenError) {
-            console.error("[useAuth] Erro ao obter token:", tokenError);
-            setLoading(false);
-          }
-        } else {
-          Cookies.remove("firebase-token");
-          setUser(null);
-          setFamily(null);
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("[useAuth] Erro ao carregar estado de autenticacao:", {
-          error,
-          message: error instanceof Error ? error.message : "Unknown"
-        });
-        setFamily(null);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
+    return () => {
+      authStoreListeners.delete(listener);
+    };
   }, []);
+
+  const { user, family, loading } = authState;
 
   const signIn = (email: string, pass: string) =>
     signInWithEmailAndPassword(auth, email, pass);
@@ -160,14 +176,9 @@ export function useAuth() {
   };
 
   const signUp = async (email: string, pass: string, name: string) => {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      email,
-      pass,
-    );
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const newUser = userCredential.user;
 
-    // Operações de pós-cadastro não devem invalidar criação do usuário no Auth.
     try {
       await updateProfile(newUser, { displayName: name });
 
