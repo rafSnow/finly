@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import { FileBarChart } from "lucide-react";
+import { AiInsights } from "@/components/dashboard/AiInsights";
 
 export default function Dashboard() {
   const { family } = useAuth();
@@ -109,6 +110,7 @@ export default function Dashboard() {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       {!isLoading ? (
         <>
+          <AiInsights categoryNameMap={categoryNameMap} />
           <SummaryCards summary={summary} />
           <AccountsOverview />
           <CategoryChart data={categoryBreakdown} />
