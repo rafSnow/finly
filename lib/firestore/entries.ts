@@ -8,10 +8,9 @@ import {
 } from "@/types";
 import {
   Timestamp,
-  addDoc,
   collection,
-  deleteDoc,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   orderBy,
@@ -21,6 +20,7 @@ import {
   updateDoc,
   where,
   writeBatch,
+  addDoc,
 } from "firebase/firestore";
 
 function getCurrentUserUid(): string {
@@ -375,4 +375,33 @@ export async function deleteRecurringEntries(
     console.error("Erro ao excluir lançamentos recorrentes:", error);
     throw error;
   }
+}
+
+export async function addEntriesBatch(
+  familyId: string,
+  entries: Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">[]
+): Promise<void> {
+  const ownerId = getCurrentUserUid();
+  const batch = writeBatch(db);
+  const entriesRef = collection(db, "families", familyId, "entries");
+
+  // O Firestore suporta ate 500 operacoes por batch, o que atende bem extratos
+  entries.forEach((data) => {
+    const newDocRef = doc(entriesRef);
+    batch.set(newDocRef, {
+      familyId,
+      ownerId,
+      type: data.type,
+      value: data.value,
+      categoryId: data.categoryId || "",
+      accountId: data.accountId || "",
+      date: Timestamp.fromDate(data.date),
+      description: data.description?.trim() || "",
+      isRecurring: false,
+      isCredit: !!data.isCredit,
+      createdAt: serverTimestamp(),
+    });
+  });
+
+  await batch.commit();
 }

@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/useToast";
 import { getCategories } from "@/lib/firestore/categories";
 import { formatMonthYear } from "@/lib/utils/format";
 import { Category, Entry, EntryFilters, RecurringScope } from "@/types";
+import { Plus, FileUp } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -141,15 +143,27 @@ export default function Lancamentos() {
 
   return (
     <div className="space-y-4 pb-24">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-[#F1F0FF]">Lançamentos</h2>
-        <Button
-          type="button"
-          onClick={() => router.push("/lancamentos/novo")}
-          className="w-auto px-4 py-2"
-        >
-          Novo lançamento
-        </Button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 items-center gap-4">
+          <h2 className="text-xl font-bold text-[#F1F0FF]">Lançamentos</h2>
+        </div>
+
+        <div className="flex gap-2">
+          <Link
+            href="/lancamentos/importar"
+            className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 font-medium text-[#F1F0FF] transition-colors hover:bg-white/10"
+          >
+            <FileUp size={18} />
+            <span className="hidden sm:inline">Importar</span>
+          </Link>
+          <Link
+            href="/lancamentos/novo"
+            className="flex items-center gap-2 rounded-xl bg-[#8B5CF6] px-4 py-2 font-medium text-white transition-colors hover:bg-[#7C3AED]"
+          >
+            <Plus size={18} />
+            <span className="hidden sm:inline">Novo</span>
+          </Link>
+        </div>
       </div>
 
       <div className="mb-5 space-y-4 rounded-2xl border border-white/[0.07] bg-[#111118] p-4">

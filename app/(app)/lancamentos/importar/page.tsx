@@ -1,0 +1,265 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useFamily } from "@/hooks/useFamily";
+import { getCategories } from "@/lib/firestore/categories";
+import { Category } from "@/types";
+import { useAccounts } from "@/hooks/useAccounts";
+import { useEntries } from "@/hooks/useEntries";
+import { parseCSV, parseOFX, guessCategory, DraftEntry } from "@/lib/utils/importParser";
+import { formatCurrency } from "@/lib/utils/format";
+import { UploadCloud, CheckCircle, Trash2, ArrowLeft, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+
+export default function ImportarExtratoPage() {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { family } = useFamily();
+  const [categories, setCategories] = useState<Category[]>([]);
+  
+  useEffect(() => {
+    if (family?.id) {
+      getCategories(family.id).then(setCategories).catch(console.error);
+    }
+  }, [family?.id]);
+
+  const { accounts } = useAccounts();
+  const { addBatch } = useEntries({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+
+  const [accountId, setAccountId] = useState("");
+  const [drafts, setDrafts] = useState<DraftEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const text = await file.text();
+      let entries: DraftEntry[] = [];
+      
+      if (file.name.toLowerCase().endsWith(".ofx")) {
+        entries = parseOFX(text);
+      } else if (file.name.toLowerCase().endsWith(".csv")) {
+        entries = await parseCSV(text);
+      } else {
+        alert("Formato não suportado. Por favor, envie um .ofx ou .csv.");
+        return;
+      }
+
+      const entriesWithCategories = entries.map(e => ({
+        ...e,
+        categoryId: guessCategory(e.description, categories)
+      }));
+
+      setDrafts(entriesWithCategories);
+      setStep(2);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao processar o arquivo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setDrafts(prev => prev.map(d => d.id === id ? { ...d, selected: !d.selected } : d));
+  };
+
+  const updateCategory = (id: string, catId: string) => {
+    setDrafts(prev => prev.map(d => d.id === id ? { ...d, categoryId: catId } : d));
+  };
+
+  const updateDescription = (id: string, desc: string) => {
+    setDrafts(prev => prev.map(d => d.id === id ? { ...d, description: desc } : d));
+  };
+
+  const deleteDraft = (id: string) => {
+    setDrafts(prev => prev.filter(d => d.id !== id));
+  };
+
+  const handleSave = async () => {
+    if (!accountId) {
+      alert("Selecione uma conta para atribuir estes lançamentos.");
+      return;
+    }
+
+    const toSave = drafts.filter(d => d.selected);
+    if (toSave.length === 0) return;
+
+    setLoading(true);
+    try {
+      const payload = toSave.map(d => ({
+        type: d.type,
+        value: d.value,
+        description: d.description,
+        date: new Date(d.date + "T12:00:00"),
+        categoryId: d.categoryId || "",
+        accountId: accountId,
+        isCredit: accounts.find(a => a.id === accountId)?.accountType === "credit",
+        isRecurring: false,
+        isInstallment: false
+      }));
+
+      await addBatch(payload);
+      router.push("/lancamentos");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao salvar lançamentos.");
+      setLoading(false);
+    }
+  };
+
+  const selectedCount = drafts.filter(d => d.selected).length;
+
+  return (
+    <div className="space-y-6 pb-24">
+      <div className="flex items-center gap-4">
+        <Link 
+          href="/lancamentos"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#A09DC0] transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <ArrowLeft size={20} />
+        </Link>
+        <div>
+          <h2 className="text-xl font-bold text-[#F1F0FF]">Importar Extrato</h2>
+          <p className="text-sm text-[#A09DC0]">Adicione transações em lote via OFX ou CSV</p>
+        </div>
+      </div>
+
+      {step === 1 && (
+        <div className="mx-auto max-w-lg space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-[#A09DC0]">Conta de Destino</label>
+            <Select
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              className="w-full"
+              options={[
+                { value: "", label: "Selecione uma conta..." },
+                ...accounts.map(acc => ({ value: acc.id, label: acc.name }))
+              ]}
+            />
+            <p className="text-xs text-[#6B6890]">Todas as transações importadas serão atribuídas a esta conta.</p>
+          </div>
+
+          <div 
+            onClick={() => accountId ? fileInputRef.current?.click() : alert('Selecione uma conta primeiro')}
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-colors ${accountId ? 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10' : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'}`}
+          >
+            <UploadCloud size={48} className="mb-4 text-[#8B5CF6]" />
+            <p className="mb-1 text-center font-medium text-[#F1F0FF]">
+              Clique ou arraste um arquivo
+            </p>
+            <p className="text-center text-sm text-[#A09DC0]">
+              Formatos suportados: .ofx, .csv
+            </p>
+            <input 
+              type="file" 
+              accept=".ofx,.csv" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2 text-sm text-[#A09DC0]">
+              <Loader2 size={16} className="animate-spin" />
+              Lendo arquivo...
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-[#A09DC0]">
+              <span className="font-bold text-[#F1F0FF]">{selectedCount}</span> transações selecionadas
+            </p>
+            <button
+              onClick={handleSave}
+              disabled={loading || selectedCount === 0}
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#8B5CF6] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#7C3AED] disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+              Importar Lançamentos
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-white/[0.07] bg-white/[0.02] text-xs uppercase text-[#6B6890]">
+                  <tr>
+                    <th className="px-4 py-3"></th>
+                    <th className="px-4 py-3 font-semibold">Data</th>
+                    <th className="px-4 py-3 font-semibold">Descrição</th>
+                    <th className="px-4 py-3 font-semibold">Categoria</th>
+                    <th className="px-4 py-3 font-semibold text-right">Valor</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.07]">
+                  {drafts.map((draft) => (
+                    <tr key={draft.id} className={`transition-colors hover:bg-white/[0.02] ${!draft.selected ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <input 
+                          type="checkbox" 
+                          checked={draft.selected} 
+                          onChange={() => toggleSelect(draft.id)}
+                          className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-[#8B5CF6] focus:ring-[#8B5CF6] focus:ring-offset-gray-900"
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[#A09DC0]">
+                        {draft.date.split("-").reverse().join("/")}
+                      </td>
+                      <td className="min-w-[200px] px-4 py-3">
+                        <Input 
+                          value={draft.description} 
+                          onChange={(e) => updateDescription(draft.id, e.target.value)}
+                          className="h-8 bg-transparent text-sm border-white/10"
+                        />
+                      </td>
+                      <td className="min-w-[150px] px-4 py-3">
+                        <Select
+                          value={draft.categoryId || ""}
+                          onChange={(e) => updateCategory(draft.id, e.target.value)}
+                          className="h-8 bg-transparent text-sm border-white/10"
+                          options={[
+                            { value: "", label: "Sem categoria" },
+                            ...categories
+                              .filter(c => c.type === draft.type)
+                              .map(c => ({ value: c.id, label: c.name }))
+                          ]}
+                        />
+                      </td>
+                      <td className={`px-4 py-3 text-right font-medium ${draft.type === "income" ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+                        {formatCurrency(draft.value)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button 
+                          onClick={() => deleteDraft(draft.id)}
+                          className="text-[#6B6890] hover:text-red-400"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -10,6 +10,7 @@ import {
   getEntryById,
   updateEntry as updateEntryService,
   updateRecurringEntries as updateRecurringEntriesService,
+  addEntriesBatch,
 } from "@/lib/firestore/entries";
 import {
   CreateEntryInput,
@@ -31,6 +32,7 @@ type UseEntriesResult = {
     count: number,
     isInstallment?: boolean
   ) => Promise<void>;
+  addBatch: (entries: Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">[]) => Promise<void>;
   updateEntry: (
     entryId: string,
     data: Partial<Entry>,
@@ -107,6 +109,14 @@ export function useEntries(filters: EntryFilters): UseEntriesResult {
         payload.count,
         payload.isInstallment
       );
+    },
+    onSuccess: invalidateEntries,
+  });
+
+  const addBatchMutation = useMutation({
+    mutationFn: async (entries: Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">[]) => {
+      if (!family?.id) throw new Error("Família não encontrada.");
+      await addEntriesBatch(family.id, entries);
     },
     onSuccess: invalidateEntries,
   });
@@ -205,6 +215,14 @@ export function useEntries(filters: EntryFilters): UseEntriesResult {
     }
   };
 
+  const addBatch = async (entries: Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">[]) => {
+    try {
+      await addBatchMutation.mutateAsync(entries);
+    } catch (e) {
+      throw new Error(getFriendlyErrorMessage(e));
+    }
+  };
+
   return {
     entries,
     loading: isLoading,
@@ -213,5 +231,6 @@ export function useEntries(filters: EntryFilters): UseEntriesResult {
     createRecurringEntries,
     updateEntry,
     deleteEntry,
+    addBatch,
   };
 }
