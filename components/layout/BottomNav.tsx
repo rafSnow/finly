@@ -7,12 +7,14 @@ import {
   Settings,
   Tag,
   Target,
+  Wallet,
 } from "lucide-react";
 
 export function BottomNav() {
   const pathname = usePathname();
   const tabs = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "Contas", path: "/contas", icon: Wallet },
     { name: "Lançamentos", path: "/lancamentos", icon: ArrowLeftRight },
     { name: "Metas", path: "/metas", icon: Target },
     { name: "Categorias", path: "/categorias", icon: Tag },

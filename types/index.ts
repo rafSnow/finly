@@ -12,6 +12,7 @@ export interface CreateEntryInput {
   type: "income" | "expense";
   value: number;
   categoryId: string;
+  accountId: string;
   date: Date;
   description?: string;
 }
@@ -67,12 +68,16 @@ export interface Entry {
   type: "income" | "expense";
   value: number;
   categoryId: string;
+  accountId?: string;
   date: Date;
   description?: string;
   ownerId: string;
   recurrenceId?: string;
   recurrenceIndex?: number;
   isRecurring: boolean;
+  isInstallment?: boolean;
+  installmentCount?: number;
+  isCredit?: boolean;
   createdAt: Date;
 }
 
@@ -105,3 +110,14 @@ export interface Invite {
   expiresAt: Date;
   createdAt: Date;
 }
+
+export interface Account {
+  id: string;
+  familyId: string;
+  name: string;
+  accountType?: "checking" | "credit";
+  closingDay?: number;
+  dueDay?: number;
+  createdAt: Date;
+}
+

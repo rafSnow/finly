@@ -100,7 +100,7 @@ export default function EditarLancamento() {
 
     const updateData = getUpdateDataFromPayload(entry, payload);
 
-    if (entry.isRecurring) {
+    if (entry.isRecurring || entry.isInstallment) {
       setPendingData(updateData);
       setScopeModalOpen(true);
       return;

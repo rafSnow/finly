@@ -19,6 +19,24 @@ import {
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const passwordSchema = z.object({
+  newPassword: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres."),
+  confirmNewPassword: z.string().min(1, "Confirmação é obrigatória.")
+}).superRefine((data, ctx) => {
+  if (data.newPassword !== data.confirmNewPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "As senhas não coincidem.",
+      path: ["confirmNewPassword"],
+    });
+  }
+});
+
+type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function Ajustes() {
   const router = useRouter();
@@ -46,9 +64,15 @@ export default function Ajustes() {
   const [sendingInvite, setSendingInvite] = useState(false);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
+
+  const {
+    register: registerPassword,
+    handleSubmit: handleSubmitPassword,
+    reset: resetPassword,
+    formState: { errors: passwordErrors, isSubmitting: savingPassword },
+  } = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+  });
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isRemovePartnerConfirmOpen, setIsRemovePartnerConfirmOpen] = useState(false);
@@ -110,34 +134,19 @@ export default function Ajustes() {
     }
   };
 
-  const handleChangePassword = async () => {
+  const handleChangePassword = async (values: PasswordFormValues) => {
     const authUser = auth.currentUser;
-    if (!authUser) {
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError("A nova senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      setError("As senhas nao coincidem.");
-      return;
-    }
+    if (!authUser) return;
 
     clearMessages();
-    setSavingPassword(true);
     try {
-      await updatePassword(authUser, newPassword);
+      await updatePassword(authUser, values.newPassword);
       setIsPasswordModalOpen(false);
-      setNewPassword("");
-      setConfirmNewPassword("");
+      resetPassword();
       showToast("Senha alterada com sucesso", "success");
     } catch (changePasswordError) {
       console.error("Erro ao alterar senha:", changePasswordError);
       showToast("Nao foi possivel alterar a senha. Faca login novamente e tente de novo.", "error");
-    } finally {
-      setSavingPassword(false);
     }
   };
 
@@ -382,31 +391,34 @@ export default function Ajustes() {
         onClose={() => setIsPasswordModalOpen(false)}
         title="Alterar senha"
       >
-        <Input
-          label="Nova senha"
-          type="password"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
-        <Input
-          label="Confirmar nova senha"
-          type="password"
-          value={confirmNewPassword}
-          onChange={(event) => setConfirmNewPassword(event.target.value)}
-        />
-        <div className="flex gap-2 mt-4">
-          <Button onClick={handleChangePassword} loading={savingPassword} className="flex-1">
-            Salvar
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
-            disabled={savingPassword}
-            onClick={() => setIsPasswordModalOpen(false)}
-          >
-            Cancelar
-          </Button>
-        </div>
+        <form onSubmit={handleSubmitPassword(handleChangePassword)}>
+          <Input
+            label="Nova senha"
+            type="password"
+            {...registerPassword("newPassword")}
+            error={passwordErrors.newPassword?.message}
+          />
+          <Input
+            label="Confirmar nova senha"
+            type="password"
+            {...registerPassword("confirmNewPassword")}
+            error={passwordErrors.confirmNewPassword?.message}
+          />
+          <div className="flex gap-2 mt-4">
+            <Button type="submit" loading={savingPassword} className="flex-1">
+              Salvar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              disabled={savingPassword}
+              onClick={() => setIsPasswordModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal

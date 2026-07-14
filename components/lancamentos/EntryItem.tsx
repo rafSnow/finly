@@ -31,7 +31,12 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
         <p className="truncate text-sm font-medium text-[#F1F0FF]">{categoryName}</p>
         <p className="mt-0.5 truncate text-xs text-[#6B6890]">
           {entry.description || formatShortDate(entry.date)}
-          {entry.isRecurring ? (
+          {entry.isInstallment && entry.installmentCount ? (
+            <span className="ml-1 text-[#F1F0FF] font-medium">
+              ({(entry.recurrenceIndex ?? 0) + 1}/{entry.installmentCount})
+            </span>
+          ) : null}
+          {entry.isRecurring && !entry.isInstallment ? (
             <span className="ml-1 inline-flex items-center gap-1">
               <Repeat2 className="h-3 w-3" /> Recorrente
             </span>

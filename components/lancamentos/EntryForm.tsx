@@ -4,21 +4,56 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAuth } from "@/hooks/useAuth";
+import { useAccounts } from "@/hooks/useAccounts";
 import { getCategories } from "@/lib/firestore/categories";
-import { formatCurrency } from "@/lib/utils/format";
 import {
   Category,
   CreateEntryInput,
   Entry,
   RecurrenceInterval,
 } from "@/types";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useId } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 
-type EntryFormSubmitPayload = {
+const entrySchema = z.object({
+  type: z.enum(["income", "expense"]),
+  valueInput: z.string().min(1, "Informe o valor."),
+  accountId: z.string().min(1, "Selecione uma conta."),
+  categoryId: z.string().min(1, "Selecione uma categoria."),
+  dateInput: z.string().min(1, "Informe uma data."),
+  description: z.string().max(200, "Máximo de 200 caracteres.").optional(),
+  repetitionType: z.enum(["none", "recurring", "installment"]),
+  recurrenceInterval: z.enum(["weekly", "monthly", "yearly"]).optional(),
+  recurrenceCount: z.number().min(2, "Mínimo 2").max(60, "Máximo 60").optional(),
+}).superRefine((data, ctx) => {
+  if (data.repetitionType !== "none") {
+    if (!data.recurrenceInterval) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o intervalo.",
+        path: ["recurrenceInterval"],
+      });
+    }
+    if (!data.recurrenceCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe a quantidade.",
+        path: ["recurrenceCount"],
+      });
+    }
+  }
+});
+
+type EntryFormValues = z.infer<typeof entrySchema>;
+
+export type EntryFormSubmitPayload = {
   data: CreateEntryInput;
   recurring?: {
     interval: RecurrenceInterval;
     count: number;
+    isInstallment: boolean;
   };
 };
 
@@ -30,22 +65,17 @@ interface EntryFormProps {
   canConfigureRecurrence?: boolean;
 }
 
-interface FormErrors {
-  type?: string;
-  value?: string;
-  categoryId?: string;
-  date?: string;
-  description?: string;
-  recurrenceInterval?: string;
-  recurrenceCount?: string;
-}
-
 function parseCurrencyToNumber(value: string): number {
   const digits = value.replace(/\D/g, "");
-  if (!digits) {
-    return 0;
-  }
+  if (!digits) return 0;
   return Number(digits) / 100;
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
 }
 
 function formatDateInput(date: Date): string {
@@ -63,43 +93,40 @@ export function EntryForm({
   canConfigureRecurrence = true,
 }: EntryFormProps) {
   const { family } = useAuth();
-
+  const { accounts, loading: accountsLoading } = useAccounts();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
-  const [type, setType] = useState<Entry["type"]>(initialData?.type ?? "expense");
-  const [valueInput, setValueInput] = useState(
-    formatCurrency(initialData?.value ?? 0),
-  );
-  const [categoryId, setCategoryId] = useState(initialData?.categoryId ?? "");
-  const [dateInput, setDateInput] = useState(
-    formatDateInput(initialData?.date ?? new Date()),
-  );
-  const [description, setDescription] = useState(initialData?.description ?? "");
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<EntryFormValues>({
+    resolver: zodResolver(entrySchema),
+    defaultValues: {
+      type: initialData?.type ?? "expense",
+      valueInput: formatCurrency(initialData?.value ?? 0),
+      accountId: initialData?.accountId ?? "",
+      categoryId: initialData?.categoryId ?? "",
+      dateInput: formatDateInput(initialData?.date ?? new Date()),
+      description: initialData?.description ?? "",
+      repetitionType: initialData?.isInstallment
+        ? "installment"
+        : initialData?.isRecurring
+        ? "recurring"
+        : "none",
+      recurrenceInterval: "monthly",
+      recurrenceCount: 2,
+    },
+  });
 
-  const [isRecurring, setIsRecurring] = useState(initialData?.isRecurring ?? false);
-  const [recurrenceInterval, setRecurrenceInterval] = useState<RecurrenceInterval>(
-    "monthly",
-  );
-  const [recurrenceCount, setRecurrenceCount] = useState<number>(2);
-
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [saving, setSaving] = useState(false);
-  const descriptionId = useMemo(() => `descricao-${crypto.randomUUID()}`, []);
-
-  useEffect(() => {
-    if (!initialData) {
-      return;
-    }
-
-    setType(initialData.type);
-    setValueInput(formatCurrency(initialData.value));
-    setCategoryId(initialData.categoryId);
-    setDateInput(formatDateInput(initialData.date));
-    setDescription(initialData.description ?? "");
-    setIsRecurring(initialData.isRecurring ?? false);
-    setErrors({});
-  }, [initialData]);
+  const type = watch("type");
+  const categoryId = watch("categoryId");
+  const repetitionType = watch("repetitionType");
+  const description = watch("description") ?? "";
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -108,270 +135,204 @@ export function EntryForm({
         setCategoriesLoading(false);
         return;
       }
-
       setCategoriesLoading(true);
       try {
         const list = await getCategories(family.id);
         setCategories(list);
       } catch (error) {
         console.error("Erro ao carregar categorias do formulário:", error);
-        setCategories([]);
       } finally {
         setCategoriesLoading(false);
       }
     };
-
     loadCategories();
   }, [family?.id]);
 
   useEffect(() => {
-    if (!categoryId) {
-      return;
-    }
-
-    if (categoriesLoading) {
-      return;
-    }
-
-    if (categories.length === 0) {
-      return;
-    }
-
-    const selected = categories.find((category) => category.id === categoryId);
-    if (!selected) {
-      return;
-    }
-
+    if (!categoryId || categoriesLoading || categories.length === 0) return;
+    const selected = categories.find((c) => c.id === categoryId);
+    if (!selected) return;
     if (selected.type !== "both" && selected.type !== type) {
-      setCategoryId("");
+      setValue("categoryId", "", { shouldValidate: true });
     }
-  }, [categories, categoriesLoading, categoryId, type]);
+  }, [categories, categoriesLoading, categoryId, type, setValue]);
 
   const filteredCategories = useMemo(() => {
-    const validCategories = categories.filter(
-      (category) => category.type === "both" || category.type === type,
-    );
-
-    if (!categoryId) {
-      return validCategories;
-    }
-
-    const alreadyListed = validCategories.some((category) => category.id === categoryId);
-    if (alreadyListed) {
-      return validCategories;
-    }
-
-    const selectedCategory = categories.find((category) => category.id === categoryId);
-    if (selectedCategory) {
-      return [selectedCategory, ...validCategories];
-    }
-
-    return [{ id: categoryId, name: "Categoria atual", type: "both", familyId: "", createdAt: new Date(), isDefault: false }, ...validCategories];
+    const valid = categories.filter((c) => c.type === "both" || c.type === type);
+    if (!categoryId) return valid;
+    if (valid.some((c) => c.id === categoryId)) return valid;
+    const selected = categories.find((c) => c.id === categoryId);
+    if (selected) return [selected, ...valid];
+    return [
+      { id: categoryId, name: "Categoria atual", type: "both", familyId: "", createdAt: new Date(), isDefault: false },
+      ...valid,
+    ];
   }, [categories, categoryId, type]);
 
-  const validate = (): boolean => {
-    const nextErrors: FormErrors = {};
-    const value = parseCurrencyToNumber(valueInput);
-
-    if (!type) {
-      nextErrors.type = "Selecione o tipo do lançamento.";
-    }
-    if (!value || value <= 0) {
-      nextErrors.value = "Informe um valor maior que zero.";
-    }
-    if (!categoryId) {
-      nextErrors.categoryId = "Selecione uma categoria.";
-    }
-
-    const selectedDate = new Date(`${dateInput}T00:00:00`);
-    if (!dateInput || Number.isNaN(selectedDate.getTime())) {
-      nextErrors.date = "Informe uma data válida.";
-    }
-
-    if (description.length > 200) {
-      nextErrors.description = "A descrição deve ter no máximo 200 caracteres.";
-    }
-
-    if (isRecurring) {
-      if (!recurrenceInterval) {
-        nextErrors.recurrenceInterval = "Selecione o intervalo.";
-      }
-      if (!Number.isInteger(recurrenceCount) || recurrenceCount < 2 || recurrenceCount > 60) {
-        nextErrors.recurrenceCount = "Informe repetições entre 2 e 60.";
-      }
-    }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!validate()) {
+  const onFormSubmit = async (values: EntryFormValues) => {
+    const numValue = parseCurrencyToNumber(values.valueInput);
+    if (numValue <= 0) {
+      // Manual error if 0 since zod checks string presence
       return;
     }
 
     const payload: EntryFormSubmitPayload = {
       data: {
-        type,
-        value: parseCurrencyToNumber(valueInput),
-        categoryId,
-        date: new Date(`${dateInput}T00:00:00`),
-        description: description.trim(),
+        type: values.type,
+        value: numValue,
+        accountId: values.accountId,
+        categoryId: values.categoryId,
+        date: new Date(`${values.dateInput}T00:00:00`),
+        description: values.description?.trim(),
       },
     };
 
-    if (isRecurring) {
+    if (values.repetitionType !== "none" && values.recurrenceInterval && values.recurrenceCount) {
       payload.recurring = {
-        interval: recurrenceInterval,
-        count: recurrenceCount,
+        interval: values.recurrenceInterval,
+        count: values.recurrenceCount,
+        isInstallment: values.repetitionType === "installment",
       };
     }
 
-    setSaving(true);
-    try {
-      await onSubmit(payload);
-    } finally {
-      setSaving(false);
-    }
+    await onSubmit(payload);
   };
 
+  const descriptionId = useId();
+
   return (
-    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-6">
+    <form onSubmit={handleSubmit(onFormSubmit)} className="flex-1 overflow-y-auto px-5 py-6">
       <div className="mb-6 grid grid-cols-2 rounded-xl bg-[#1A1A26] p-1">
-          <button
-            type="button"
-            className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
-              type === "expense"
-                ? "rounded-lg bg-red-500/20 text-red-400"
-                : "rounded-lg text-[#6B6890]"
-            }`}
-            onClick={() => setType("expense")}
-          >
-            Despesa
-          </button>
-          <button
-            type="button"
-            className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
-              type === "income"
-                ? "rounded-lg bg-emerald-500/20 text-emerald-400"
-                : "rounded-lg text-[#6B6890]"
-            }`}
-            onClick={() => setType("income")}
-          >
-            Receita
-          </button>
+        <button
+          type="button"
+          className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
+            type === "expense" ? "rounded-lg bg-red-500/20 text-red-400" : "rounded-lg text-[#6B6890]"
+          }`}
+          onClick={() => setValue("type", "expense")}
+        >
+          Despesa
+        </button>
+        <button
+          type="button"
+          className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
+            type === "income" ? "rounded-lg bg-emerald-500/20 text-emerald-400" : "rounded-lg text-[#6B6890]"
+          }`}
+          onClick={() => setValue("type", "income")}
+        >
+          Receita
+        </button>
       </div>
-        {errors.type ? <p className="text-sm text-red-500 mt-1">{errors.type}</p> : null}
 
       <label className="mb-1.5 block text-center text-sm font-medium text-[#A09DC0]">Valor</label>
-      <input
-        value={valueInput}
-        onChange={(event) => {
-          const nextValue = parseCurrencyToNumber(event.target.value);
-          setValueInput(formatCurrency(nextValue));
-        }}
-        className="mb-6 w-full border-b-2 border-white/10 bg-transparent py-3 text-center text-4xl font-bold text-[#F1F0FF] outline-none transition-colors duration-200 focus:border-[#7C3AED]"
+      <Controller
+        name="valueInput"
+        control={control}
+        render={({ field }) => (
+          <input
+            {...field}
+            onChange={(e) => {
+              const val = parseCurrencyToNumber(e.target.value);
+              field.onChange(formatCurrency(val));
+            }}
+            className="mb-6 w-full border-b-2 border-white/10 bg-transparent py-3 text-center text-4xl font-bold text-[#F1F0FF] outline-none transition-colors duration-200 focus:border-[#7C3AED]"
+          />
+        )}
       />
-      {errors.value ? <p className="mb-4 text-center text-sm text-red-400">{errors.value}</p> : null}
+      {errors.valueInput ? <p className="mb-4 text-center text-sm text-red-400">{errors.valueInput.message}</p> : null}
 
       <div className="mb-4 space-y-4 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
         <Select
+          label="Conta"
+          {...register("accountId")}
+          options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          disabled={accountsLoading}
+          error={errors.accountId?.message}
+        />
+
+        <Select
           label="Categoria"
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          options={filteredCategories.map((category) => ({
-            value: category.id,
-            label: category.name,
-          }))}
+          {...register("categoryId")}
+          options={filteredCategories.map((c) => ({ value: c.id, label: c.name }))}
           disabled={categoriesLoading}
-          error={errors.categoryId}
+          error={errors.categoryId?.message}
         />
 
         <Input
           label="Data"
           type="date"
-          value={dateInput}
-          onChange={(event) => setDateInput(event.target.value)}
-          error={errors.date}
+          {...register("dateInput")}
+          error={errors.dateInput?.message}
         />
 
         <div>
           <label htmlFor={descriptionId} className="mb-1.5 block text-sm font-medium text-[#A09DC0]">
             Descricao
           </label>
-        <textarea
-          id={descriptionId}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          maxLength={200}
-          rows={3}
-          className={`w-full rounded-xl border bg-[#1A1A26] px-4 py-3 text-[#F1F0FF] outline-none transition-all duration-200 placeholder:text-[#6B6890] focus:border-[#7C3AED] focus:shadow-[0_0_0_3px_rgba(124,58,237,0.2)] ${
-            errors.description ? "border-red-500/60" : "border-white/8"
-          }`}
-        />
+          <textarea
+            id={descriptionId}
+            {...register("description")}
+            maxLength={200}
+            rows={3}
+            className={`w-full rounded-xl border bg-[#1A1A26] px-4 py-3 text-[#F1F0FF] outline-none transition-all duration-200 placeholder:text-[#6B6890] focus:border-[#7C3AED] focus:shadow-[0_0_0_3px_rgba(124,58,237,0.2)] ${
+              errors.description ? "border-red-500/60" : "border-white/8"
+            }`}
+          />
           <div className="mt-1 flex items-center justify-between">
-          {errors.description ? (
-              <p className="text-xs text-red-400">{errors.description}</p>
-          ) : (
-            <span />
-          )}
+            {errors.description ? (
+              <p className="text-xs text-red-400">{errors.description.message}</p>
+            ) : (
+              <span />
+            )}
             <p className="text-xs text-[#6B6890]">{description.length}/200</p>
           </div>
         </div>
 
         {canConfigureRecurrence ? (
           <div className="py-1">
-            <label className="flex items-center gap-3 text-sm text-[#A09DC0]">
-            <input
-              type="checkbox"
-              checked={isRecurring}
-              onChange={(event) => setIsRecurring(event.target.checked)}
-                className="h-4 w-4 rounded accent-[#7C3AED]"
+            <Select
+              label="Tipo de Repetição"
+              {...register("repetitionType")}
+              options={[
+                { value: "none", label: "Não repete" },
+                { value: "recurring", label: "Recorrente (Ex: Assinatura)" },
+                { value: "installment", label: "Parcelado (Ex: Cartão)" },
+              ]}
             />
-            Recorrente?
-          </label>
           </div>
         ) : null}
 
-        {canConfigureRecurrence && isRecurring ? (
+        {canConfigureRecurrence && repetitionType !== "none" ? (
           <div className="mt-3 space-y-3 rounded-xl border border-white/6 bg-[#1A1A26] p-4">
-          <Select
-            label="Intervalo"
-            value={recurrenceInterval}
-            onChange={(event) =>
-              setRecurrenceInterval(event.target.value as RecurrenceInterval)
-            }
-            options={[
-              { value: "weekly", label: "Semanal" },
-              { value: "monthly", label: "Mensal" },
-              { value: "yearly", label: "Anual" },
-            ]}
-            error={errors.recurrenceInterval}
-          />
-          <Input
-            label="Repetições"
-            type="number"
-            min={2}
-            max={60}
-            value={String(recurrenceCount)}
-            onChange={(event) => setRecurrenceCount(Number(event.target.value))}
-            error={errors.recurrenceCount}
-          />
+            <Select
+              label="Intervalo"
+              {...register("recurrenceInterval")}
+              options={[
+                { value: "weekly", label: "Semanal" },
+                { value: "monthly", label: "Mensal" },
+                { value: "yearly", label: "Anual" },
+              ]}
+              error={errors.recurrenceInterval?.message}
+            />
+            <Input
+              label={repetitionType === "installment" ? "Número de Parcelas" : "Repetições"}
+              type="number"
+              min={2}
+              max={60}
+              {...register("recurrenceCount", { valueAsNumber: true })}
+              error={errors.recurrenceCount?.message}
+            />
           </div>
         ) : null}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Button type="submit" loading={saving}>
+        <Button type="submit" loading={isSubmitting}>
           {submitLabel}
         </Button>
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
           Cancelar
         </Button>
       </div>
     </form>
   );
 }
-
-export type { EntryFormSubmitPayload };

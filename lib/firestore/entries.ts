@@ -48,6 +48,7 @@ function mapEntryDoc(id: string, data: Record<string, unknown>): Entry {
     type: ((data.type as Entry["type"]) ?? "expense"),
     value: Number(data.value ?? 0),
     categoryId: (data.categoryId as string) ?? "",
+    accountId: (data.accountId as string | undefined) ?? undefined,
     date: mapTimestampDate(data.date),
     description: (data.description as string | undefined) ?? undefined,
     ownerId: (data.ownerId as string) ?? "",
@@ -57,6 +58,12 @@ function mapEntryDoc(id: string, data: Record<string, unknown>): Entry {
         ? data.recurrenceIndex
         : undefined,
     isRecurring: Boolean(data.isRecurring),
+    isInstallment: Boolean(data.isInstallment),
+    installmentCount:
+      typeof data.installmentCount === "number"
+        ? data.installmentCount
+        : undefined,
+    isCredit: Boolean(data.isCredit),
     createdAt: mapTimestampDate(data.createdAt),
   };
 }
@@ -91,6 +98,9 @@ function sanitizePartialEntry(
   if (data.categoryId) {
     sanitized.categoryId = data.categoryId;
   }
+  if (data.accountId) {
+    sanitized.accountId = data.accountId;
+  }
   if (data.date instanceof Date) {
     sanitized.date = data.date;
   }
@@ -105,6 +115,15 @@ function sanitizePartialEntry(
   }
   if (typeof data.recurrenceIndex === "number") {
     sanitized.recurrenceIndex = data.recurrenceIndex;
+  }
+  if (typeof data.isInstallment === "boolean") {
+    sanitized.isInstallment = data.isInstallment;
+  }
+  if (typeof data.installmentCount === "number") {
+    sanitized.installmentCount = data.installmentCount;
+  }
+  if (typeof data.isCredit === "boolean") {
+    sanitized.isCredit = data.isCredit;
   }
 
   return sanitized;
@@ -170,15 +189,25 @@ export async function createEntry(
   const ownerId = getCurrentUserUid();
 
   try {
+    let isCredit = false;
+    if (data.accountId) {
+      const accSnap = await getDoc(doc(db, "families", familyId, "accounts", data.accountId));
+      if (accSnap.exists() && accSnap.data().accountType === "credit") {
+        isCredit = true;
+      }
+    }
+
     await addDoc(collection(db, "families", familyId, "entries"), {
       familyId,
       type: data.type,
       value: data.value,
       categoryId: data.categoryId,
+      accountId: data.accountId,
       date: Timestamp.fromDate(data.date),
       description: data.description?.trim() || "",
       ownerId,
       isRecurring: false,
+      isCredit,
       createdAt: serverTimestamp(),
     });
   } catch (error) {
@@ -192,10 +221,19 @@ export async function createRecurringEntries(
   data: CreateEntryInput,
   interval: RecurrenceInterval,
   count: number,
+  isInstallment: boolean = false
 ): Promise<void> {
   const ownerId = getCurrentUserUid();
 
   try {
+    let isCredit = false;
+    if (data.accountId) {
+      const accSnap = await getDoc(doc(db, "families", familyId, "accounts", data.accountId));
+      if (accSnap.exists() && accSnap.data().accountType === "credit") {
+        isCredit = true;
+      }
+    }
+
     const batch = writeBatch(db);
     const recurrenceId = crypto.randomUUID();
 
@@ -208,12 +246,16 @@ export async function createRecurringEntries(
         type: data.type,
         value: data.value,
         categoryId: data.categoryId,
+        accountId: data.accountId,
         date: Timestamp.fromDate(nextDate),
         description: data.description?.trim() || "",
         ownerId,
         recurrenceId,
         recurrenceIndex: i,
-        isRecurring: true,
+        isRecurring: !isInstallment, // Se for parcela, não é 'recurring' infinito/assinatura
+        isInstallment,
+        installmentCount: isInstallment ? count : undefined,
+        isCredit,
         createdAt: serverTimestamp(),
       });
     }

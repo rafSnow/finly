@@ -25,7 +25,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type PartnerProfile = {
   uid: string;
@@ -35,14 +35,8 @@ type PartnerProfile = {
 
 async function getPartnerProfile(uid: string): Promise<PartnerProfile | null> {
   try {
-    console.log("📖 [useFamily] Buscando perfil do parceiro:", uid);
     const userDoc = await getDoc(doc(db, "users", uid));
-    console.log("✅ [useFamily] Perfil do parceiro recebido", { uid, exists: userDoc.exists() });
-    
-    if (!userDoc.exists()) {
-      console.log("⚠️ [useFamily] Documento do usuário não existe", uid);
-      return null;
-    }
+    if (!userDoc.exists()) return null;
 
     const data = userDoc.data() as { name?: string; email?: string };
     return {
@@ -51,11 +45,7 @@ async function getPartnerProfile(uid: string): Promise<PartnerProfile | null> {
       email: data.email ?? "",
     };
   } catch (error) {
-    console.error("❌ [useFamily] Erro ao buscar perfil do parceiro:", {
-      error,
-      uid,
-      message: error instanceof Error ? error.message : "Unknown"
-    });
+    console.error("Erro ao buscar perfil do parceiro:", error);
     return null;
   }
 }
@@ -69,9 +59,7 @@ async function getPendingSentInvite(fromUid: string): Promise<Invite | null> {
       limit(1),
     );
     const snapshot = await getDocs(invitesQuery);
-    if (snapshot.empty) {
-      return null;
-    }
+    if (snapshot.empty) return null;
 
     const inviteCode = snapshot.docs[0].id;
     return getInviteByCode(inviteCode);
@@ -83,136 +71,114 @@ async function getPendingSentInvite(fromUid: string): Promise<Invite | null> {
 
 export function useFamily() {
   const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [family, setFamily] = useState<Family | null>(null);
-  const [partner, setPartner] = useState<PartnerProfile | null>(null);
-  const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
-  const [receivedInvite, setReceivedInvite] = useState<Invite | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["family_context", user?.uid, user?.email],
+    queryFn: async () => {
+      if (!user) {
+        return {
+          family: null,
+          partner: null,
+          pendingInvite: null,
+          receivedInvite: null,
+        };
+      }
 
-  const refresh = useCallback(async () => {
-    if (authLoading) {
-      return;
-    }
-
-    if (!user) {
-      setFamily(null);
-      setPartner(null);
-      setPendingInvite(null);
-      setReceivedInvite(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
       const familyData = await getFamilyByMember(user.uid);
-      setFamily(familyData);
+      let partnerProfile: PartnerProfile | null = null;
 
       if (familyData) {
-        const partnerUid = familyData.memberIds.find((memberId) => memberId !== user.uid);
+        const partnerUid = familyData.memberIds.find((id) => id !== user.uid);
         if (partnerUid) {
-          const profile = await getPartnerProfile(partnerUid);
-          setPartner(profile);
-        } else {
-          setPartner(null);
+          partnerProfile = await getPartnerProfile(partnerUid);
         }
-      } else {
-        setPartner(null);
       }
 
       const sentInvite = await getPendingSentInvite(user.uid);
-      setPendingInvite(sentInvite);
-
       const incomingInvite = user.email ? await getInviteByEmail(user.email) : null;
-      setReceivedInvite(incomingInvite);
-    } catch (error) {
-      console.error("Erro ao carregar contexto familiar:", error);
-      setFamily(null);
-      setPartner(null);
-      setPendingInvite(null);
-      setReceivedInvite(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [authLoading, user]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+      return {
+        family: familyData,
+        partner: partnerProfile,
+        pendingInvite: sentInvite,
+        receivedInvite: incomingInvite,
+      };
+    },
+    enabled: !authLoading && !!user,
+  });
 
-  const sendInvite = async (toEmail: string): Promise<void> => {
-    if (!user) {
-      throw new Error("Usuário não autenticado.");
-    }
-
-    const targetEmail = toEmail.trim().toLowerCase();
-    if (!targetEmail) {
-      throw new Error("E-mail do parceiro é obrigatório.");
-    }
-
-    const activeFamily = family ?? (await createFamily(user.uid));
-    if (!family) {
-      setFamily(activeFamily);
-    }
-
-    await createInvite(
-      user.uid,
-      user.displayName ?? "Usuario",
-      user.email,
-      targetEmail,
-      activeFamily.id,
-    );
-    await refresh();
+  const invalidateContext = () => {
+    queryClient.invalidateQueries({ queryKey: ["family_context", user?.uid, user?.email] });
   };
 
-  const acceptInvite = async (code: string): Promise<void> => {
-    if (!user) {
-      throw new Error("Usuário não autenticado.");
-    }
+  const sendInviteMutation = useMutation({
+    mutationFn: async (toEmail: string) => {
+      if (!user) throw new Error("Usuário não autenticado.");
+      const targetEmail = toEmail.trim().toLowerCase();
+      if (!targetEmail) throw new Error("E-mail do parceiro é obrigatório.");
 
-    await acceptInviteService(code, user.uid);
-    await refresh();
-  };
+      let activeFamily = data?.family;
+      if (!activeFamily) {
+        activeFamily = await createFamily(user.uid);
+      }
 
-  const removePartner = async (): Promise<void> => {
-    if (!user || !family || !partner) {
-      throw new Error("Nenhum parceiro vinculado.");
-    }
+      await createInvite(
+        user.uid,
+        user.displayName ?? "Usuario",
+        user.email,
+        targetEmail,
+        activeFamily.id,
+      );
+    },
+    onSuccess: invalidateContext,
+  });
 
-    await removeMemberFromFamily(family.id, partner.uid);
-    await refresh();
-  };
+  const acceptInviteMutation = useMutation({
+    mutationFn: async (code: string) => {
+      if (!user) throw new Error("Usuário não autenticado.");
+      await acceptInviteService(code, user.uid);
+    },
+    onSuccess: invalidateContext,
+  });
 
-  const cancelPendingInvite = async (): Promise<void> => {
-    if (!pendingInvite) {
-      return;
-    }
+  const removePartnerMutation = useMutation({
+    mutationFn: async () => {
+      if (!user || !data?.family || !data?.partner) {
+        throw new Error("Nenhum parceiro vinculado.");
+      }
+      await removeMemberFromFamily(data.family.id, data.partner.uid);
+    },
+    onSuccess: invalidateContext,
+  });
 
-    await cancelInvite(pendingInvite.id);
-    await refresh();
-  };
+  const cancelPendingInviteMutation = useMutation({
+    mutationFn: async () => {
+      if (!data?.pendingInvite) return;
+      await cancelInvite(data.pendingInvite.id);
+    },
+    onSuccess: invalidateContext,
+  });
 
-  const declineReceivedInvite = async (): Promise<void> => {
-    if (!receivedInvite) {
-      return;
-    }
-
-    await declineInvite(receivedInvite.id);
-    await refresh();
-  };
+  const declineReceivedInviteMutation = useMutation({
+    mutationFn: async () => {
+      if (!data?.receivedInvite) return;
+      await declineInvite(data.receivedInvite.id);
+    },
+    onSuccess: invalidateContext,
+  });
 
   return {
-    family,
-    partner,
-    pendingInvite,
-    receivedInvite,
-    loading,
-    sendInvite,
-    acceptInvite,
-    removePartner,
-    cancelPendingInvite,
-    declineReceivedInvite,
-    refresh,
+    family: data?.family ?? null,
+    partner: data?.partner ?? null,
+    pendingInvite: data?.pendingInvite ?? null,
+    receivedInvite: data?.receivedInvite ?? null,
+    loading: isLoading || authLoading,
+    sendInvite: async (email: string) => sendInviteMutation.mutateAsync(email),
+    acceptInvite: async (code: string) => acceptInviteMutation.mutateAsync(code),
+    removePartner: async () => removePartnerMutation.mutateAsync(),
+    cancelPendingInvite: async () => cancelPendingInviteMutation.mutateAsync(),
+    declineReceivedInvite: async () => declineReceivedInviteMutation.mutateAsync(),
+    refresh: refetch,
   };
 }

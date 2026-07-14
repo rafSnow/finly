@@ -8,44 +8,31 @@ import {
   updateGoal as updateGoalService,
 } from "@/lib/firestore/goals";
 import { CreateGoalInput, Goal } from "@/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export function useGoals() {
   const { family, loading: authLoading } = useAuth();
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const queryClient = useQueryClient();
   const familyId = family?.id;
 
-  const loadGoals = useCallback(async () => {
-    if (authLoading) {
-      return;
-    }
+  const {
+    data: goals = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["goals", familyId],
+    queryFn: async () => {
+      if (!familyId) return [];
+      return getGoals(familyId);
+    },
+    enabled: !authLoading && !!familyId,
+  });
 
-    if (!familyId) {
-      setGoals([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const list = await getGoals(familyId);
-      setGoals(list);
-    } catch {
-      setError("Nao foi possivel carregar as metas.");
-      setGoals([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [authLoading, familyId]);
-
-  useEffect(() => {
-    loadGoals();
-  }, [loadGoals]);
+  const invalidateGoals = () => {
+    queryClient.invalidateQueries({ queryKey: ["goals", familyId] });
+  };
 
   const hasDuplicateCategory = useMemo(
     () => (categoryId: string, excludingGoalId?: string) =>
@@ -54,53 +41,61 @@ export function useGoals() {
           goal.categoryId === categoryId &&
           (!excludingGoalId || goal.id !== excludingGoalId),
       ),
-    [goals],
+    [goals]
   );
 
-  const createGoal = async (input: CreateGoalInput) => {
-    if (!familyId) {
-      throw new Error("Familia nao encontrada.");
-    }
-    if (hasDuplicateCategory(input.categoryId)) {
-      throw new Error("Ja existe uma meta para essa categoria.");
-    }
+  const createGoalMutation = useMutation({
+    mutationFn: async (input: CreateGoalInput) => {
+      if (!familyId) throw new Error("Familia nao encontrada.");
+      if (hasDuplicateCategory(input.categoryId)) {
+        throw new Error("Ja existe uma meta para essa categoria.");
+      }
+      await createGoalService(familyId, input);
+    },
+    onSuccess: invalidateGoals,
+  });
 
-    await createGoalService(familyId, input);
-    await loadGoals();
+  const updateGoalMutation = useMutation({
+    mutationFn: async (payload: { goalId: string; updates: Partial<Goal> }) => {
+      if (!familyId) throw new Error("Familia nao encontrada.");
+      if (
+        payload.updates.categoryId &&
+        hasDuplicateCategory(payload.updates.categoryId, payload.goalId)
+      ) {
+        throw new Error("Ja existe uma meta para essa categoria.");
+      }
+      await updateGoalService(familyId, payload.goalId, payload.updates);
+    },
+    onSuccess: invalidateGoals,
+  });
+
+  const deleteGoalMutation = useMutation({
+    mutationFn: async (goalId: string) => {
+      if (!familyId) throw new Error("Familia nao encontrada.");
+      await deleteGoalService(familyId, goalId);
+    },
+    onSuccess: invalidateGoals,
+  });
+
+  const createGoal = async (input: CreateGoalInput) => {
+    await createGoalMutation.mutateAsync(input);
   };
 
   const updateGoal = async (goalId: string, updates: Partial<Goal>) => {
-    if (!familyId) {
-      throw new Error("Familia nao encontrada.");
-    }
-
-    if (
-      updates.categoryId &&
-      hasDuplicateCategory(updates.categoryId, goalId)
-    ) {
-      throw new Error("Ja existe uma meta para essa categoria.");
-    }
-
-    await updateGoalService(familyId, goalId, updates);
-    await loadGoals();
+    await updateGoalMutation.mutateAsync({ goalId, updates });
   };
 
   const deleteGoal = async (goalId: string) => {
-    if (!familyId) {
-      throw new Error("Familia nao encontrada.");
-    }
-
-    await deleteGoalService(familyId, goalId);
-    await loadGoals();
+    await deleteGoalMutation.mutateAsync(goalId);
   };
 
   return {
     goals,
-    loading,
-    error,
+    loading: isLoading || authLoading,
+    error: error ? (error as Error).message : null,
     createGoal,
     updateGoal,
     deleteGoal,
-    refresh: loadGoals,
+    refresh: refetch,
   };
 }

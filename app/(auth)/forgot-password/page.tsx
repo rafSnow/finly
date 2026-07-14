@@ -5,30 +5,41 @@ import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email("E-mail inválido.").min(1, "E-mail é obrigatório."),
+});
+
+type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPassword() {
-  const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const { resetPassword } = useAuth();
 
-  const handleReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ForgotPasswordFormValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+  });
+
+  const onFormSubmit = async (values: ForgotPasswordFormValues) => {
     setError("");
     setMessage("");
 
     try {
-      await resetPassword(email);
+      await resetPassword(values.email);
       setMessage(
         "Se este e-mail estiver cadastrado, você receberá as instruções em breve.",
       );
     } catch {
       setError("Ocorreu um erro ao tentar recuperar a senha.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -47,15 +58,14 @@ export default function ForgotPassword() {
           <p className="mb-4 text-center text-sm text-emerald-400">{message}</p>
         )}
 
-        <form onSubmit={handleReset}>
+        <form onSubmit={handleSubmit(onFormSubmit)}>
           <Input
             label="E-mail"
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            {...register("email")}
+            error={errors.email?.message}
           />
-          <Button type="submit" loading={loading} className="mt-4">
+          <Button type="submit" loading={isSubmitting} className="mt-4">
             Enviar instruções
           </Button>
         </form>

@@ -7,36 +7,47 @@ import { createFamily, getFamilyByMember } from "@/lib/firestore/families";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const registerSchema = z.object({
+  name: z.string().min(1, "O nome é obrigatório."),
+  email: z.string().email("E-mail inválido.").min(1, "O e-mail é obrigatório."),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+  confirmPassword: z.string().min(1, "A confirmação de senha é obrigatória."),
+}).superRefine((data, ctx) => {
+  if (data.password !== data.confirmPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "As senhas não coincidem.",
+      path: ["confirmPassword"],
+    });
+  }
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const { signUp, signInWithGoogle } = useAuth();
   const router = useRouter();
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+  });
+
+  const onFormSubmit = async (values: RegisterFormValues) => {
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("As senhas não coincidem.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    setLoading(true);
     try {
-      const userCredential = await signUp(email, password, name);
+      const userCredential = await signUp(values.email, values.password, values.name);
       const existingFamily = await getFamilyByMember(userCredential.user.uid);
       if (!existingFamily) {
         await createFamily(userCredential.user.uid);
@@ -55,8 +66,6 @@ export default function Register() {
       } else {
         setError("Falha ao finalizar seu cadastro, mas sua conta pode ter sido criada. Tente entrar.");
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -93,36 +102,32 @@ export default function Register() {
           <p className="mb-4 text-center text-sm text-red-400">{error}</p>
         )}
 
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleSubmit(onFormSubmit)}>
           <Input
             label="Nome"
             type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            {...register("name")}
+            error={errors.name?.message}
           />
           <Input
             label="E-mail"
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            {...register("email")}
+            error={errors.email?.message}
           />
           <Input
             label="Senha"
             type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            {...register("password")}
+            error={errors.password?.message}
           />
           <Input
             label="Confirmar Senha"
             type="password"
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            {...register("confirmPassword")}
+            error={errors.confirmPassword?.message}
           />
-          <Button type="submit" loading={loading} className="mt-4">
+          <Button type="submit" loading={isSubmitting} className="mt-4">
             Cadastrar
           </Button>
         </form>

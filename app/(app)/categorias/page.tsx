@@ -19,6 +19,15 @@ import {
 } from "@/lib/firestore/categories";
 import { Category } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const categorySchema = z.object({
+  name: z.string().min(1, "O nome da categoria é obrigatório.").trim(),
+  type: z.enum(["expense", "income", "both"]),
+});
+type CategoryFormValues = z.infer<typeof categorySchema>;
 
 type CategoryType = Category["type"];
 
@@ -38,12 +47,19 @@ export default function Categorias() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<CategoryType>("expense");
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [activeTab, setActiveTab] = useState<CategoryType>("expense");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<CategoryFormValues>({
+    resolver: zodResolver(categorySchema),
+    defaultValues: { name: "", type: "expense" },
+  });
 
   const filteredCategories = useMemo(
     () => categories.filter((category) => category.type === activeTab),
@@ -84,41 +100,30 @@ export default function Categorias() {
 
   const openCreateModal = () => {
     setEditingCategory(null);
-    setName("");
-    setType("expense");
+    reset({ name: "", type: "expense" });
     setIsModalOpen(true);
   };
 
   const openEditModal = (category: Category) => {
     setEditingCategory(category);
-    setName(category.name);
-    setType(category.type);
+    reset({ name: category.name, type: category.type });
     setIsModalOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!family) {
-      return;
-    }
-
-    const normalizedName = name.trim();
-    if (!normalizedName) {
-      setError("O nome da categoria é obrigatório.");
-      return;
-    }
-
-    setSaving(true);
+  const onFormSubmit = async (values: CategoryFormValues) => {
+    if (!family) return;
     setError("");
+
     try {
       if (editingCategory) {
         await updateCategory(family.id, editingCategory.id, {
-          name: normalizedName,
-          type,
+          name: values.name,
+          type: values.type,
         });
       } else {
         await createCategory(family.id, {
-          name: normalizedName,
-          type,
+          name: values.name,
+          type: values.type,
           isDefault: false,
         });
       }
@@ -129,8 +134,6 @@ export default function Categorias() {
       console.error("Erro ao salvar categoria:", saveError);
       setError("Não foi possível salvar a categoria.");
       showToast("Nao foi possivel salvar a categoria.", "error");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -283,31 +286,33 @@ export default function Categorias() {
         onClose={() => setIsModalOpen(false)}
         title={editingCategory ? "Editar categoria" : "Nova categoria"}
       >
-        <Input
-          label="Nome"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
-        />
-        <Select
-          label="Tipo"
-          value={type}
-          onChange={(event) => setType(event.target.value as CategoryType)}
-          options={TYPE_OPTIONS}
-        />
-        <div className="mt-4 flex gap-2">
-          <Button onClick={handleSave} loading={saving} className="flex-1">
-            Salvar
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setIsModalOpen(false)}
-            className="flex-1"
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-        </div>
+        <form onSubmit={handleSubmit(onFormSubmit)}>
+          <Input
+            label="Nome"
+            {...register("name")}
+            error={errors.name?.message}
+          />
+          <Select
+            label="Tipo"
+            {...register("type")}
+            options={TYPE_OPTIONS}
+            error={errors.type?.message}
+          />
+          <div className="mt-6 flex gap-2">
+            <Button type="submit" loading={isSubmitting} className="flex-1">
+              Salvar
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsModalOpen(false)}
+              className="flex-1"
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <ConfirmModal

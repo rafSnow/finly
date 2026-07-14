@@ -13,7 +13,16 @@ import { useToast } from "@/hooks/useToast";
 import { getCategories } from "@/lib/firestore/categories";
 import { formatCurrency } from "@/lib/utils/format";
 import { Category, Goal } from "@/types";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const goalSchema = z.object({
+  categoryId: z.string().min(1, "Selecione uma categoria."),
+  limit: z.number().positive("Informe um valor de limite valido."),
+});
+type GoalFormValues = z.infer<typeof goalSchema>;
 
 export default function Metas() {
   const { family } = useAuth();
@@ -25,12 +34,18 @@ export default function Metas() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [categoryId, setCategoryId] = useState("");
-  const [limit, setLimit] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<GoalFormValues>({
+    resolver: zodResolver(goalSchema),
+    defaultValues: { categoryId: "", limit: undefined },
+  });
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -61,67 +76,42 @@ export default function Metas() {
 
   const openCreateModal = () => {
     setEditingGoal(null);
-    setCategoryId("");
-    setLimit("");
-    setFormError(null);
+    reset({ categoryId: "", limit: undefined });
     setIsModalOpen(true);
   };
 
   const openEditModal = (goal: Goal) => {
     setEditingGoal(goal);
-    setCategoryId(goal.categoryId);
-    setLimit(String(goal.limit));
-    setFormError(null);
+    reset({ categoryId: goal.categoryId, limit: goal.limit });
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
-    if (submitting) {
-      return;
-    }
+    if (isSubmitting) return;
     setIsModalOpen(false);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const parsedLimit = Number(limit);
-    if (!categoryId) {
-      setFormError("Selecione uma categoria.");
-      return;
-    }
-    if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
-      setFormError("Informe um valor de limite valido.");
-      return;
-    }
-
-    setSubmitting(true);
-    setFormError(null);
-
+  const onFormSubmit = async (values: GoalFormValues) => {
     try {
       if (editingGoal) {
         await updateGoal(editingGoal.id, {
-          categoryId,
-          limit: parsedLimit,
+          categoryId: values.categoryId,
+          limit: values.limit,
           period: "monthly",
         });
         showToast("Meta salva com sucesso", "success");
       } else {
         await createGoal({
-          categoryId,
-          limit: parsedLimit,
+          categoryId: values.categoryId,
+          limit: values.limit,
           period: "monthly",
         });
         showToast("Meta salva com sucesso", "success");
       }
-
       setIsModalOpen(false);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "Erro ao salvar meta.";
-      setFormError(message);
       showToast(message, "error");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -212,18 +202,15 @@ export default function Metas() {
         onClose={closeModal}
         title={editingGoal ? "Editar meta" : "Nova meta"}
       >
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onFormSubmit)}>
           <Select
             label="Categoria"
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value)}
-            options={[
-              { value: "", label: "Selecione" },
-              ...categories.map((category) => ({
-                value: category.id,
-                label: category.name,
-              })),
-            ]}
+            {...register("categoryId")}
+            options={categories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            }))}
+            error={errors.categoryId?.message}
           />
 
           <Input
@@ -231,20 +218,18 @@ export default function Metas() {
             type="number"
             min={0}
             step="0.01"
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
+            {...register("limit", { valueAsNumber: true })}
+            error={errors.limit?.message}
           />
 
-          {formError ? <p className="mb-3 text-sm text-red-400">{formError}</p> : null}
-
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="submit" loading={submitting}>
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <Button type="submit" loading={isSubmitting}>
               Salvar
             </Button>
             <Button
               type="button"
               variant="secondary"
-              disabled={submitting}
+              disabled={isSubmitting}
               onClick={closeModal}
             >
               Cancelar

@@ -23,7 +23,7 @@ export default function NovoLancamento() {
   }: EntryFormSubmitPayload): Promise<void> => {
     try {
       if (recurring) {
-        await createRecurringEntries(data, recurring.interval, recurring.count);
+        await createRecurringEntries(data, recurring.interval, recurring.count, recurring.isInstallment);
       } else {
         await createEntry(data);
       }

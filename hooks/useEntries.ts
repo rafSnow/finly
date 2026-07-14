@@ -18,7 +18,7 @@ import {
   RecurrenceInterval,
   RecurringScope,
 } from "@/types";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 type UseEntriesResult = {
   entries: Entry[];
@@ -29,6 +29,7 @@ type UseEntriesResult = {
     data: CreateEntryInput,
     interval: RecurrenceInterval,
     count: number,
+    isInstallment?: boolean
   ) => Promise<void>;
   updateEntry: (
     entryId: string,
@@ -47,60 +48,124 @@ function getFriendlyErrorMessage(error: unknown): string {
 
 export function useEntries(filters: EntryFilters): UseEntriesResult {
   const { family } = useAuth();
-
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const filterMonth = filters.month;
   const filterYear = filters.year;
   const filterType = filters.type;
   const filterCategoryId = filters.categoryId;
 
-  const loadEntries = useCallback(async () => {
-    if (!family?.id) {
-      setEntries([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await getEntries(family.id, {
+  const {
+    data: entries = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: [
+      "entries",
+      family?.id,
+      filterMonth,
+      filterYear,
+      filterType,
+      filterCategoryId,
+    ],
+    queryFn: async () => {
+      if (!family?.id) return [];
+      return getEntries(family.id, {
         month: filterMonth,
         year: filterYear,
         type: filterType,
         categoryId: filterCategoryId,
       });
-      setEntries(list);
-    } catch (loadError) {
-      console.error("Erro ao carregar lançamentos:", loadError);
-      setError("Não foi possível carregar os lançamentos.");
-    } finally {
-      setLoading(false);
-    }
-  }, [family?.id, filterCategoryId, filterMonth, filterType, filterYear]);
+    },
+    enabled: !!family?.id,
+  });
 
-  useEffect(() => {
-    loadEntries();
-  }, [loadEntries]);
+  const invalidateEntries = () => {
+    queryClient.invalidateQueries({ queryKey: ["entries", family?.id] });
+  };
 
-  const createEntry = async (data: CreateEntryInput): Promise<void> => {
-    if (!family?.id) {
-      setError("Família não encontrada para criar lançamento.");
-      return;
-    }
-
-    setError(null);
-    try {
+  const createEntryMutation = useMutation({
+    mutationFn: async (data: CreateEntryInput) => {
+      if (!family?.id) throw new Error("Família não encontrada.");
       await createEntryService(family.id, data);
-      await loadEntries();
-    } catch (createError) {
-      console.error("Erro ao criar lançamento:", createError);
-      setError(getFriendlyErrorMessage(createError));
-      throw createError;
+    },
+    onSuccess: invalidateEntries,
+  });
+
+  const createRecurringMutation = useMutation({
+    mutationFn: async (payload: {
+      data: CreateEntryInput;
+      interval: RecurrenceInterval;
+      count: number;
+      isInstallment?: boolean;
+    }) => {
+      if (!family?.id) throw new Error("Família não encontrada.");
+      await createRecurringEntriesService(
+        family.id,
+        payload.data,
+        payload.interval,
+        payload.count,
+        payload.isInstallment
+      );
+    },
+    onSuccess: invalidateEntries,
+  });
+
+  const updateEntryMutation = useMutation({
+    mutationFn: async (payload: {
+      entryId: string;
+      data: Partial<Entry>;
+      scope: RecurringScope;
+    }) => {
+      if (!family?.id) throw new Error("Família não encontrada.");
+      if (payload.scope === "this") {
+        await updateEntryService(family.id, payload.entryId, payload.data);
+      } else {
+        const selectedEntry =
+          entries.find((entry) => entry.id === payload.entryId) ||
+          (await getEntryById(family.id, payload.entryId));
+
+        if (!selectedEntry) throw new Error("Lançamento não encontrado.");
+        await updateRecurringEntriesService(
+          family.id,
+          selectedEntry,
+          payload.scope,
+          payload.data
+        );
+      }
+    },
+    onSuccess: invalidateEntries,
+  });
+
+  const deleteEntryMutation = useMutation({
+    mutationFn: async (payload: {
+      entryId: string;
+      scope: RecurringScope;
+    }) => {
+      if (!family?.id) throw new Error("Família não encontrada.");
+      if (payload.scope === "this") {
+        await deleteEntryService(family.id, payload.entryId);
+      } else {
+        const selectedEntry =
+          entries.find((entry) => entry.id === payload.entryId) ||
+          (await getEntryById(family.id, payload.entryId));
+
+        if (!selectedEntry) throw new Error("Lançamento não encontrado.");
+        await deleteRecurringEntriesService(
+          family.id,
+          selectedEntry,
+          payload.scope
+        );
+      }
+    },
+    onSuccess: invalidateEntries,
+  });
+
+  const createEntry = async (data: CreateEntryInput) => {
+    try {
+      await createEntryMutation.mutateAsync(data);
+    } catch (e) {
+      throw new Error(getFriendlyErrorMessage(e));
     }
   };
 
@@ -108,94 +173,42 @@ export function useEntries(filters: EntryFilters): UseEntriesResult {
     data: CreateEntryInput,
     interval: RecurrenceInterval,
     count: number,
-  ): Promise<void> => {
-    if (!family?.id) {
-      setError("Família não encontrada para criar lançamento.");
-      return;
-    }
-
-    setError(null);
+    isInstallment?: boolean
+  ) => {
     try {
-      await createRecurringEntriesService(family.id, data, interval, count);
-      await loadEntries();
-    } catch (createError) {
-      console.error("Erro ao criar lançamentos recorrentes:", createError);
-      setError(getFriendlyErrorMessage(createError));
-      throw createError;
+      await createRecurringMutation.mutateAsync({ data, interval, count, isInstallment });
+    } catch (e) {
+      throw new Error(getFriendlyErrorMessage(e));
     }
   };
 
   const updateEntry = async (
     entryId: string,
     data: Partial<Entry>,
-    scope: RecurringScope = "this",
-  ): Promise<void> => {
-    if (!family?.id) {
-      setError("Família não encontrada para atualizar lançamento.");
-      return;
-    }
-
-    setError(null);
+    scope: RecurringScope = "this"
+  ) => {
     try {
-      if (scope === "this") {
-        await updateEntryService(family.id, entryId, data);
-      } else {
-        const selectedEntry =
-          entries.find((entry) => entry.id === entryId) ||
-          (await getEntryById(family.id, entryId));
-
-        if (!selectedEntry) {
-          throw new Error("Lançamento não encontrado.");
-        }
-
-        await updateRecurringEntriesService(family.id, selectedEntry, scope, data);
-      }
-
-      await loadEntries();
-    } catch (updateError) {
-      console.error("Erro ao atualizar lançamento:", updateError);
-      setError(getFriendlyErrorMessage(updateError));
-      throw updateError;
+      await updateEntryMutation.mutateAsync({ entryId, data, scope });
+    } catch (e) {
+      throw new Error(getFriendlyErrorMessage(e));
     }
   };
 
   const deleteEntry = async (
     entryId: string,
-    scope: RecurringScope = "this",
-  ): Promise<void> => {
-    if (!family?.id) {
-      setError("Família não encontrada para excluir lançamento.");
-      return;
-    }
-
-    setError(null);
+    scope: RecurringScope = "this"
+  ) => {
     try {
-      if (scope === "this") {
-        await deleteEntryService(family.id, entryId);
-      } else {
-        const selectedEntry =
-          entries.find((entry) => entry.id === entryId) ||
-          (await getEntryById(family.id, entryId));
-
-        if (!selectedEntry) {
-          throw new Error("Lançamento não encontrado.");
-        }
-
-        await deleteRecurringEntriesService(family.id, selectedEntry, scope);
-      }
-
-      await loadEntries();
-    } catch (deleteError) {
-      console.error("Erro ao excluir lançamento:", deleteError);
-      setError(getFriendlyErrorMessage(deleteError));
-      throw deleteError;
+      await deleteEntryMutation.mutateAsync({ entryId, scope });
+    } catch (e) {
+      throw new Error(getFriendlyErrorMessage(e));
     }
   };
 
   return {
     entries,
-    loading,
-    error,
+    loading: isLoading,
+    error: error ? getFriendlyErrorMessage(error) : null,
     createEntry,
     createRecurringEntries,
     updateEntry,

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { QueryProvider } from "@/components/providers/QueryProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { PWARegister } from "@/components/layout/PWARegister";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -46,10 +48,15 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-[#0A0A0F] text-[#F1F0FF]">
+      <body className="min-h-full flex flex-col bg-[#0A0A0F] text-[#F1F0FF] dark:bg-[#0A0A0F] dark:text-[#F1F0FF]">
         <PWARegister />
-        <ToastProvider>{children}</ToastProvider>
+        <QueryProvider>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+            <ToastProvider>{children}</ToastProvider>
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

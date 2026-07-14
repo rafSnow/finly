@@ -1,8 +1,11 @@
-import React from "react";
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cn } from "@/lib/utils/cn";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
   loading?: boolean;
+  asChild?: boolean;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -10,14 +13,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     variant = "primary",
     loading,
     children,
-    className = "",
+    className,
     disabled,
+    asChild = false,
     ...props
   },
   ref,
 ) {
-  const baseStyle =
-    "w-full rounded-xl px-5 py-3 flex items-center justify-center transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed";
   const variants = {
     primary:
       "bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold shadow-[0_0_24px_rgba(124,58,237,0.3)] hover:shadow-[0_0_32px_rgba(124,58,237,0.45)] active:scale-[0.98]",
@@ -29,10 +31,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       "bg-transparent hover:bg-white/5 text-[#A09DC0] hover:text-[#F1F0FF] px-4 py-2",
   };
 
+  const Comp = asChild ? Slot : "button";
+
   return (
-    <button
+    <Comp
       ref={ref}
-      className={`${baseStyle} ${variants[variant]} ${className}`}
+      className={cn(
+        "w-full rounded-xl px-5 py-3 flex items-center justify-center transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed",
+        variants[variant],
+        className
+      )}
       disabled={disabled || loading}
       {...props}
     >
@@ -44,6 +52,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       ) : (
         children
       )}
-    </button>
+    </Comp>
   );
 });

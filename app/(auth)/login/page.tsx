@@ -6,28 +6,39 @@ import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const loginSchema = z.object({
+  email: z.string().email("E-mail inválido.").min(1, "E-mail é obrigatório."),
+  password: z.string().min(1, "Senha é obrigatória."),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const { signIn, signInWithGoogle } = useAuth();
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+  });
+
+  const onFormSubmit = async (values: LoginFormValues) => {
     setError("");
     try {
-      const userCredential = await signIn(email, password);
+      const userCredential = await signIn(values.email, values.password);
       await userCredential.user.getIdToken(true);
       router.push("/dashboard");
     } catch {
       setError("Credenciais inválidas. Tente novamente.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -64,22 +75,20 @@ export default function Login() {
           <p className="mb-4 text-center text-sm text-red-400">{error}</p>
         )}
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleSubmit(onFormSubmit)}>
           <Input
             label="E-mail"
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            {...register("email")}
+            error={errors.email?.message}
           />
           <Input
             label="Senha"
             type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            {...register("password")}
+            error={errors.password?.message}
           />
-          <Button type="submit" loading={loading} className="mt-4">
+          <Button type="submit" loading={isSubmitting} className="mt-4">
             Entrar
           </Button>
         </form>

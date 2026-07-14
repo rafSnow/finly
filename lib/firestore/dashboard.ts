@@ -39,6 +39,7 @@ function mapEntry(data: Record<string, unknown>): Entry {
         ? data.recurrenceIndex
         : undefined,
     isRecurring: Boolean(data.isRecurring),
+    isCredit: Boolean(data.isCredit),
     createdAt: new Date(),
   };
 }
@@ -147,11 +148,11 @@ export async function getSummary(
     const entries = await getPeriodEntries(familyId, filters);
 
     const totalIncome = entries
-      .filter((entry) => entry.type === "income")
+      .filter((entry) => entry.type === "income" && !entry.isCredit)
       .reduce((sum, entry) => sum + entry.value, 0);
 
     const totalExpense = entries
-      .filter((entry) => entry.type === "expense")
+      .filter((entry) => entry.type === "expense" && !entry.isCredit)
       .reduce((sum, entry) => sum + entry.value, 0);
 
     return {
@@ -175,7 +176,7 @@ export async function getEntriesByCategory(
       getCategoriesMap(familyId),
     ]);
 
-    const expenseEntries = entries.filter((entry) => entry.type === "expense");
+    const expenseEntries = entries.filter((entry) => entry.type === "expense" && !entry.isCredit);
     const totalExpense = expenseEntries.reduce((sum, entry) => sum + entry.value, 0);
 
     if (totalExpense <= 0) {
@@ -228,7 +229,7 @@ export async function getPartnerSummaries(
     }
 
     const totalExpense = entries
-      .filter((entry) => entry.type === "expense")
+      .filter((entry) => entry.type === "expense" && !entry.isCredit)
       .reduce((sum, entry) => sum + entry.value, 0);
 
     console.log("📊 [dashboard] Despesa total:", totalExpense);
@@ -236,10 +237,10 @@ export async function getPartnerSummaries(
     const summaries = memberProfiles.map((member) => {
       const memberEntries = entries.filter((entry) => entry.ownerId === member.uid);
       const totalIncome = memberEntries
-        .filter((entry) => entry.type === "income")
+        .filter((entry) => entry.type === "income" && !entry.isCredit)
         .reduce((sum, entry) => sum + entry.value, 0);
       const memberExpense = memberEntries
-        .filter((entry) => entry.type === "expense")
+        .filter((entry) => entry.type === "expense" && !entry.isCredit)
         .reduce((sum, entry) => sum + entry.value, 0);
 
       const summary = {
