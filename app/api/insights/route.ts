@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "A chave da API do Gemini (GEMINI_API_KEY) não está configurada no .env.local." },
-        { status: 500 }
+        { status: 400 }
       );
     }
     
@@ -39,15 +39,28 @@ export async function POST(req: NextRequest) {
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash-8b",
       contents: prompt,
     });
 
     return NextResponse.json({ insight: response.text });
   } catch (error: any) {
     console.error("Erro no Consultor IA:", error);
+    
+    // Extraindo mensagem de erro da API do Gemini se disponível
+    let errorMessage = "Desculpe, não consegui processar seus dados no momento.";
+    if (error?.message) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object') {
+      try {
+        errorMessage = JSON.stringify(error);
+      } catch (e) {}
+    }
+
     return NextResponse.json(
-      { error: "Desculpe, não consegui processar seus dados no momento." },
+      { error: errorMessage },
       { status: 500 }
     );
   }
