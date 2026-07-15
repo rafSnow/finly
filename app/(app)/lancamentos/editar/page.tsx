@@ -10,8 +10,8 @@ import { useEntries } from "@/hooks/useEntries";
 import { useToast } from "@/hooks/useToast";
 import { getEntryById } from "@/lib/firestore/entries";
 import { Entry } from "@/types";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
 
 function normalizeDescription(value?: string): string {
   return (value ?? "").trim();
@@ -45,9 +45,10 @@ function getUpdateDataFromPayload(
   return nextData;
 }
 
-export default function EditarLancamento() {
+function EditarLancamentoContent() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
   const { family } = useAuth();
   const { showToast } = useToast();
 
@@ -66,14 +67,14 @@ export default function EditarLancamento() {
 
   useEffect(() => {
     const loadEntry = async () => {
-      if (!family?.id || !params?.id) {
+      if (!family?.id || !id) {
         setLoading(false);
         return;
       }
 
       setLoading(true);
       try {
-        const found = await getEntryById(family.id, params.id);
+        const found = await getEntryById(family.id, id);
         if (!found) {
           setError("Lançamento não encontrado.");
           setEntry(null);
@@ -91,7 +92,7 @@ export default function EditarLancamento() {
     };
 
     loadEntry();
-  }, [family?.id, params?.id]);
+  }, [family?.id, id]);
 
   const handleSubmit = async (payload: EntryFormSubmitPayload): Promise<void> => {
     if (!entry) {
@@ -174,5 +175,13 @@ export default function EditarLancamento() {
         onSelect={handleScopeSelect}
       />
     </div>
+  );
+}
+
+export default function EditarLancamento() {
+  return (
+    <Suspense fallback={<p className="text-[#A09DC0]">Carregando lançamento...</p>}>
+      <EditarLancamentoContent />
+    </Suspense>
   );
 }

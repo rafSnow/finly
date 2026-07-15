@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useAccounts, useAccountBalance } from "@/hooks/useAccounts";
 import { Account } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreditCard, MoreVertical, Pencil, Plus, Trash, Wallet } from "lucide-react";
+import { CreditCard, MoreVertical, Pencil, Plus, Trash, Wallet, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -26,11 +26,11 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
 
   return (
     <div className="relative flex flex-col justify-between rounded-2xl border border-white/5 bg-[#111118] transition-colors hover:bg-white/[0.02]">
-      <Link href={`/contas/${account.id}`} className="flex flex-1 flex-col p-5">
+      <Link href={`/contas/detalhes?id=${account.id}`} className="flex flex-1 flex-col p-5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-[#1A1A26] ${account.accountType === "credit" ? "text-orange-500" : "text-[#7C3AED]"}`}>
-              {account.accountType === "credit" ? <CreditCard size={20} /> : <Wallet size={20} />}
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-[#1A1A26] ${account.accountType === "credit" ? "text-orange-500" : account.accountType === "investment" ? "text-emerald-500" : "text-[#7C3AED]"}`}>
+              {account.accountType === "credit" ? <CreditCard size={20} /> : account.accountType === "investment" ? <TrendingUp size={20} /> : <Wallet size={20} />}
             </div>
             <div>
               <h3 className="font-medium text-[#F1F0FF]">{account.name}</h3>
@@ -90,7 +90,7 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
         </div>
 
         <div className="mt-6">
-          <p className="text-sm font-medium text-[#6B6890]">{account.accountType === "credit" ? "Fatura atual (aprox.)" : "Saldo atual"}</p>
+          <p className="text-sm font-medium text-[#6B6890]">{account.accountType === "credit" ? "Fatura atual (aprox.)" : account.accountType === "investment" ? "Patrimônio" : "Saldo atual"}</p>
           <p className={`mt-1 text-2xl font-bold ${account.accountType === "credit" || balance >= 0 ? "text-[#F1F0FF]" : "text-red-400"}`}>
             {loading ? "..." : formatCurrency(Math.abs(balance))}
           </p>
@@ -102,7 +102,7 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
 
 const accountBaseSchema = z.object({
   name: z.string().min(1, "O nome da conta é obrigatório").max(50, "Máximo de 50 caracteres"),
-  accountType: z.enum(["checking", "credit"]),
+  accountType: z.enum(["checking", "credit", "investment"]),
   closingDay: z.coerce.number().min(1).max(31).optional(),
   dueDay: z.coerce.number().min(1).max(31).optional(),
 });
@@ -195,7 +195,7 @@ export default function ContasPage() {
   };
 
   return (
-    <div className="flex h-full flex-col p-8">
+    <div className="space-y-4 pb-24">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#F1F0FF]">Contas</h1>
@@ -264,6 +264,7 @@ export default function ContasPage() {
               >
                 <option value="checking">Conta Corrente / Carteira</option>
                 <option value="credit">Cartão de Crédito</option>
+                <option value="investment">Investimento</option>
               </select>
             </div>
 

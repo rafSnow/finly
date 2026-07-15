@@ -18,30 +18,33 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 const entrySchema = z.object({
-  type: z.enum(["income", "expense"]),
+  type: z.enum(["income", "expense", "transfer"]),
   valueInput: z.string().min(1, "Informe o valor."),
   accountId: z.string().min(1, "Selecione uma conta."),
-  categoryId: z.string().min(1, "Selecione uma categoria."),
+  destinationAccountId: z.string().optional(),
+  categoryId: z.string().optional(),
   dateInput: z.string().min(1, "Informe uma data."),
   description: z.string().max(200, "Máximo de 200 caracteres.").optional(),
   repetitionType: z.enum(["none", "recurring", "installment"]),
   recurrenceInterval: z.enum(["weekly", "monthly", "yearly"]).optional(),
   recurrenceCount: z.number().min(2, "Mínimo 2").max(60, "Máximo 60").optional(),
 }).superRefine((data, ctx) => {
+  if (data.type !== "transfer" && !data.categoryId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione uma categoria.", path: ["categoryId"] });
+  }
+  if (data.type === "transfer") {
+    if (!data.destinationAccountId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione a conta destino.", path: ["destinationAccountId"] });
+    } else if (data.destinationAccountId === data.accountId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A conta destino deve ser diferente.", path: ["destinationAccountId"] });
+    }
+  }
   if (data.repetitionType !== "none") {
     if (!data.recurrenceInterval) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione o intervalo.",
-        path: ["recurrenceInterval"],
-      });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione o intervalo.", path: ["recurrenceInterval"] });
     }
     if (!data.recurrenceCount) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Informe a quantidade.",
-        path: ["recurrenceCount"],
-      });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe a quantidade.", path: ["recurrenceCount"] });
     }
   }
 });
@@ -110,6 +113,7 @@ export function EntryForm({
       type: initialData?.type ?? "expense",
       valueInput: formatCurrency(initialData?.value ?? 0),
       accountId: initialData?.accountId ?? "",
+      destinationAccountId: initialData?.destinationAccountId ?? "",
       categoryId: initialData?.categoryId ?? "",
       dateInput: formatDateInput(initialData?.date ?? new Date()),
       description: initialData?.description ?? "",
@@ -149,7 +153,7 @@ export function EntryForm({
   }, [family?.id]);
 
   useEffect(() => {
-    if (!categoryId || categoriesLoading || categories.length === 0) return;
+    if (!categoryId || categoriesLoading || categories.length === 0 || type === "transfer") return;
     const selected = categories.find((c) => c.id === categoryId);
     if (!selected) return;
     if (selected.type !== "both" && selected.type !== type) {
@@ -181,7 +185,8 @@ export function EntryForm({
         type: values.type,
         value: numValue,
         accountId: values.accountId,
-        categoryId: values.categoryId,
+        destinationAccountId: values.destinationAccountId,
+        categoryId: values.type === "transfer" ? "" : (values.categoryId || ""),
         date: new Date(`${values.dateInput}T00:00:00`),
         description: values.description?.trim(),
       },
@@ -202,7 +207,7 @@ export function EntryForm({
 
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="flex-1 overflow-y-auto px-5 py-6">
-      <div className="mb-6 grid grid-cols-2 rounded-xl bg-[#1A1A26] p-1">
+      <div className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-[#1A1A26] p-1">
         <button
           type="button"
           className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
@@ -220,6 +225,18 @@ export function EntryForm({
           onClick={() => setValue("type", "income")}
         >
           Receita
+        </button>
+        <button
+          type="button"
+          className={`py-2.5 text-center text-sm font-medium transition-all duration-200 ${
+            type === "transfer" ? "rounded-lg bg-indigo-500/20 text-indigo-400" : "rounded-lg text-[#6B6890]"
+          }`}
+          onClick={() => {
+             setValue("type", "transfer");
+             setValue("categoryId", "");
+          }}
+        >
+          Transf.
         </button>
       </div>
 
@@ -242,20 +259,30 @@ export function EntryForm({
 
       <div className="mb-4 space-y-4 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
         <Select
-          label="Conta"
+          label={type === "transfer" ? "Conta Origem" : "Conta"}
           {...register("accountId")}
           options={accounts.map((a) => ({ value: a.id, label: a.name }))}
           disabled={accountsLoading}
           error={errors.accountId?.message}
         />
 
-        <Select
-          label="Categoria"
-          {...register("categoryId")}
-          options={filteredCategories.map((c) => ({ value: c.id, label: c.name }))}
-          disabled={categoriesLoading}
-          error={errors.categoryId?.message}
-        />
+        {type === "transfer" ? (
+          <Select
+            label="Conta Destino"
+            {...register("destinationAccountId")}
+            options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            disabled={accountsLoading}
+            error={errors.destinationAccountId?.message}
+          />
+        ) : (
+          <Select
+            label="Categoria"
+            {...register("categoryId")}
+            options={filteredCategories.map((c) => ({ value: c.id, label: c.name }))}
+            disabled={categoriesLoading}
+            error={errors.categoryId?.message}
+          />
+        )}
 
         <Input
           label="Data"

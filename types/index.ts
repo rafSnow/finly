@@ -9,10 +9,11 @@ export interface EntryFilters {
 }
 
 export interface CreateEntryInput {
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
   value: number;
   categoryId: string;
   accountId: string;
+  destinationAccountId?: string;
   date: Date;
   description?: string;
 }
@@ -65,10 +66,11 @@ export interface Family {
 export interface Entry {
   id: string;
   familyId: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
   value: number;
   categoryId: string;
   accountId?: string;
+  destinationAccountId?: string;
   date: Date;
   description?: string;
   ownerId: string;
@@ -78,6 +80,8 @@ export interface Entry {
   isInstallment?: boolean;
   installmentCount?: number;
   isCredit?: boolean;
+  isTransfer?: boolean;
+  transferId?: string;
   createdAt: Date;
 }
 
@@ -115,7 +119,7 @@ export interface Account {
   id: string;
   familyId: string;
   name: string;
-  accountType?: "checking" | "credit";
+  accountType?: "checking" | "credit" | "investment";
   closingDay?: number;
   dueDay?: number;
   createdAt: Date;

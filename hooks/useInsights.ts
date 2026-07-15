@@ -5,6 +5,7 @@ import { useGoals } from "./useGoals";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
 import { CategoryBreakdown } from "@/types";
+import { GoogleGenAI } from "@google/genai";
 
 interface InsightResponse {
   insight?: string;
@@ -46,24 +47,40 @@ export function useInsights() {
         };
       });
 
-      const response = await fetch("/api/insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary,
-          categoryBreakdown: formattedBreakdown,
-          goalsProgress,
-        }),
-      });
+      const prompt = `
+        Você é o "Assistente Finly", um consultor financeiro inteligente, direto e muito amigável.
+        Seu tom é motivador e humano, usando emojis moderadamente. Responda em português (BR).
+        Sua tarefa é analisar o cenário financeiro atual do mês do usuário e fornecer 1 ou 2 parágrafos curtos de insight. Não use tabelas ou listas gigantescas, apenas dicas pontuais e observações sábias de leitura rápida.
 
-      const data: InsightResponse = await response.json();
+        DADOS DO MÊS ATUAL:
+        - Total de Receitas: R$ ${summary.totalIncome}
+        - Total de Despesas: R$ ${summary.totalExpense}
+        - Saldo Restante: R$ ${summary.balance}
 
-      if (!response.ok) {
-        throw new Error(data.error || "Ocorreu um erro ao gerar o insight.");
+        DESPESAS POR CATEGORIA:
+        ${formattedBreakdown.map((c: any) => `- ${c.categoryName}: R$ ${c.total}`).join("\n")}
+
+        STATUS DAS METAS ESTABELECIDAS:
+        ${goalsProgress.length > 0 
+          ? goalsProgress.map((g: any) => `- ${g.categoryName}: Gasto R$ ${g.spent} (Meta: R$ ${g.goalLimit}) - ${g.progress.toFixed(0)}% utilizado.`).join("\n")
+          : "O usuário não definiu metas mensais ainda."
+        }
+
+        Baseado nos dados acima, crie um insight inteligente. Seja conciso (máx. 150 palavras).
+      `;
+
+      if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+        throw new Error("A chave da API do Gemini não está configurada.");
       }
 
-      if (data.insight) {
-        setInsight(data.insight);
+      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-lite-latest",
+        contents: prompt,
+      });
+
+      if (response.text) {
+        setInsight(response.text);
       }
     } catch (err: any) {
       setError(err.message || "Erro de conexão com o Assistente.");

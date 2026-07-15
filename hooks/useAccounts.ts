@@ -19,7 +19,7 @@ export function useAccounts() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; accountType?: "checking" | "credit"; closingDay?: number; dueDay?: number }) => {
+    mutationFn: async (payload: { name: string; accountType?: "checking" | "credit" | "investment"; closingDay?: number; dueDay?: number }) => {
       if (!familyId) throw new Error("Família não encontrada");
       return createAccount(familyId, payload.name, payload.accountType, payload.closingDay, payload.dueDay);
     },
@@ -29,7 +29,7 @@ export function useAccounts() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (payload: { id: string; name?: string; accountType?: "checking" | "credit"; closingDay?: number; dueDay?: number }) => {
+    mutationFn: async (payload: { id: string; name?: string; accountType?: "checking" | "credit" | "investment"; closingDay?: number; dueDay?: number }) => {
       if (!familyId) throw new Error("Família não encontrada");
       return updateAccount(familyId, payload.id, payload);
     },

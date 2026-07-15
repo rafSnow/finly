@@ -3,6 +3,22 @@
 import { EntryItem } from "@/components/lancamentos/EntryItem";
 import { formatShortDate } from "@/lib/utils/format";
 import { Category, Entry } from "@/types";
+import { motion } from "framer-motion";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
 
 interface EntryListProps {
   entries: Entry[];
@@ -39,9 +55,14 @@ export function EntryList({ entries, categories, onEdit, onDelete }: EntryListPr
   const orderedKeys = Object.keys(grouped).sort((a, b) => (a > b ? -1 : 1));
 
   return (
-    <div className="space-y-3">
+    <motion.div 
+      className="space-y-3"
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+    >
       {orderedKeys.map((key) => (
-        <section key={key}>
+        <motion.section key={key} variants={itemVariants}>
           <h3 className="mb-1 px-0 py-2 text-xs font-semibold uppercase tracking-wider text-[#6B6890]">
             {formatGroupLabel(key)}
           </h3>
@@ -56,8 +77,8 @@ export function EntryList({ entries, categories, onEdit, onDelete }: EntryListPr
               />
             ))}
           </div>
-        </section>
+        </motion.section>
       ))}
-    </div>
+    </motion.div>
   );
 }

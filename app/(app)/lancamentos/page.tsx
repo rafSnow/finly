@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
 import { useAuth } from "@/hooks/useAuth";
 import { useEntries } from "@/hooks/useEntries";
+import { usePeriod } from "@/hooks/usePeriod";
 import { useToast } from "@/hooks/useToast";
 import { getCategories } from "@/lib/firestore/categories";
 import { formatMonthYear } from "@/lib/utils/format";
@@ -23,9 +24,8 @@ export default function Lancamentos() {
   const { family } = useAuth();
   const { showToast } = useToast();
 
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const { period, setPeriod, mounted } = usePeriod();
+  const { month, year } = period;
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
@@ -98,18 +98,16 @@ export default function Lancamentos() {
 
   const goPreviousMonth = () => {
     const date = new Date(year, month - 2, 1);
-    setMonth(date.getMonth() + 1);
-    setYear(date.getFullYear());
+    setPeriod({ month: date.getMonth() + 1, year: date.getFullYear() });
   };
 
   const goNextMonth = () => {
     const date = new Date(year, month, 1);
-    setMonth(date.getMonth() + 1);
-    setYear(date.getFullYear());
+    setPeriod({ month: date.getMonth() + 1, year: date.getFullYear() });
   };
 
   const handleEdit = (entry: Entry) => {
-    router.push(`/lancamentos/${entry.id}/editar`);
+    router.push(`/lancamentos/editar?id=${entry.id}`);
   };
 
   const handleDeleteClick = (entry: Entry) => {
@@ -177,7 +175,7 @@ export default function Lancamentos() {
             &lt;
           </button>
           <p className="text-base font-semibold capitalize text-[#F1F0FF]">
-            {formatMonthYear(month, year)}
+            {mounted ? formatMonthYear(month, year) : "..."}
           </p>
           <button
             type="button"

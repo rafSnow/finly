@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { getCategoryIcon } from "@/lib/utils/categoryIcons";
 
 type CategoryChartProps = {
   data: CategoryBreakdown[];
@@ -69,14 +70,19 @@ export function CategoryChart({ data }: CategoryChartProps) {
         {data.map((item, index) => (
           <div
             key={item.categoryId}
-            className="flex items-center justify-between border-b border-white/[0.05] py-2 last:border-0"
+            className="flex items-center justify-between border-b border-white/[0.05] py-3 last:border-0"
           >
-            <div className="flex items-center">
-              <span
-                className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-              />
-              <span className="text-sm text-[#A09DC0]">{item.categoryName}</span>
+            <div className="flex items-center gap-3">
+              <div 
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1A1A26]"
+                style={{ color: CHART_COLORS[index % CHART_COLORS.length] }}
+              >
+                {(() => {
+                  const Icon = getCategoryIcon(item.categoryName);
+                  return <Icon size={14} />;
+                })()}
+              </div>
+              <span className="text-sm font-medium text-[#F1F0FF]">{item.categoryName}</span>
             </div>
             <div className="flex items-center">
               <span className="text-sm font-medium text-[#F1F0FF]">{formatCurrency(item.total)}</span>

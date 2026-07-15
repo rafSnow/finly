@@ -30,7 +30,7 @@ export async function getAccounts(familyId: string): Promise<Account[]> {
         id: doc.id,
         familyId,
         name: data.name as string,
-        accountType: data.accountType as "checking" | "credit" | undefined,
+        accountType: data.accountType as "checking" | "credit" | "investment" | undefined,
         closingDay: typeof data.closingDay === "number" ? data.closingDay : undefined,
         dueDay: typeof data.dueDay === "number" ? data.dueDay : undefined,
         createdAt: data.createdAt?.toDate() || new Date(),
@@ -45,7 +45,7 @@ export async function getAccounts(familyId: string): Promise<Account[]> {
 export async function createAccount(
   familyId: string,
   name: string,
-  accountType: "checking" | "credit" = "checking",
+  accountType: "checking" | "credit" | "investment" = "checking",
   closingDay?: number,
   dueDay?: number
 ): Promise<Account> {
@@ -122,13 +122,28 @@ export async function getAccountBalance(
       where("accountId", "==", accountId),
       where("type", "==", "expense")
     );
+    const transferOutQuery = query(
+      collection(db, "families", familyId, "entries"),
+      where("accountId", "==", accountId),
+      where("type", "==", "transfer")
+    );
+    const transferInQuery = query(
+      collection(db, "families", familyId, "entries"),
+      where("destinationAccountId", "==", accountId),
+      where("type", "==", "transfer")
+    );
 
-    const [incomesSnap, expensesSnap] = await Promise.all([
+    const [incomesSnap, expensesSnap, transferOutSnap, transferInSnap] = await Promise.all([
       getAggregateFromServer(incomesQuery, { total: sum("value") }),
       getAggregateFromServer(expensesQuery, { total: sum("value") }),
+      getAggregateFromServer(transferOutQuery, { total: sum("value") }),
+      getAggregateFromServer(transferInQuery, { total: sum("value") }),
     ]);
 
-    return (incomesSnap.data().total || 0) - (expensesSnap.data().total || 0);
+    const totalIn = (incomesSnap.data().total || 0) + (transferInSnap.data().total || 0);
+    const totalOut = (expensesSnap.data().total || 0) + (transferOutSnap.data().total || 0);
+
+    return totalIn - totalOut;
   } catch (error) {
     console.error("Erro ao buscar saldo da conta:", error);
     return 0; // fallback seguro para não quebrar a UI se as permissões falharem por falta de index

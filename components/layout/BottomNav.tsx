@@ -8,6 +8,7 @@ import {
   Tag,
   Target,
   Wallet,
+  TrendingUp,
 } from "lucide-react";
 
 export function BottomNav() {
@@ -18,6 +19,7 @@ export function BottomNav() {
     { name: "Lançamentos", path: "/lancamentos", icon: ArrowLeftRight },
     { name: "Metas", path: "/metas", icon: Target },
     { name: "Categorias", path: "/categorias", icon: Tag },
+    { name: "Patrimônio", path: "/patrimonio", icon: TrendingUp },
     { name: "Ajustes", path: "/ajustes", icon: Settings },
   ];
 

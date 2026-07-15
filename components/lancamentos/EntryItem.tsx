@@ -2,7 +2,8 @@
 
 import { formatCurrency, formatShortDate } from "@/lib/utils/format";
 import { Entry } from "@/types";
-import { ArrowDownCircle, ArrowUpCircle, Repeat2, Edit2, Trash2 } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, Repeat2, Edit2, Trash2 } from "lucide-react";
+import { getCategoryIcon } from "@/lib/utils/categoryIcons";
 import { motion, useAnimation, PanInfo } from "framer-motion";
 
 interface EntryItemProps {
@@ -14,6 +15,7 @@ interface EntryItemProps {
 
 export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemProps) {
   const isIncome = entry.type === "income";
+  const isTransfer = entry.type === "transfer" || entry.isTransfer;
   const controls = useAnimation();
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -28,6 +30,8 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
   const closeActions = () => {
     controls.start({ x: 0 });
   };
+
+  const Icon = getCategoryIcon(categoryName, isIncome);
 
   return (
     <div className="relative border-b border-white/[0.05] last:border-0 overflow-hidden">
@@ -62,17 +66,17 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
       >
         <div
           className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
-            isIncome ? "bg-emerald-500/15" : "bg-red-500/15"
+            isTransfer ? "bg-indigo-500/15" : isIncome ? "bg-emerald-500/15" : "bg-red-500/15"
           }`}
         >
-          {isIncome ? (
-            <ArrowUpCircle className="h-5 w-5 text-emerald-400" />
+          {isTransfer ? (
+            <ArrowRightLeft className="h-5 w-5 text-indigo-400" />
           ) : (
-            <ArrowDownCircle className="h-5 w-5 text-red-400" />
+            <Icon className={`h-5 w-5 ${isIncome ? "text-emerald-400" : "text-red-400"}`} />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-[#F1F0FF]">{categoryName}</p>
+          <p className="truncate text-sm font-medium text-[#F1F0FF]">{isTransfer ? "Transferência" : categoryName}</p>
           <p className="mt-0.5 truncate text-xs text-[#6B6890]">
             {entry.description || formatShortDate(entry.date)}
             {entry.isInstallment && entry.installmentCount ? (
@@ -89,10 +93,10 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
         </div>
         <p
           className={`whitespace-nowrap text-sm font-semibold ${
-            isIncome ? "text-emerald-400" : "text-red-400"
+            isTransfer ? "text-indigo-400" : isIncome ? "text-emerald-400" : "text-red-400"
           }`}
         >
-          {isIncome ? "+" : "-"}
+          {isTransfer ? "" : isIncome ? "+" : "-"}
           {formatCurrency(entry.value)}
         </p>
       </motion.div>

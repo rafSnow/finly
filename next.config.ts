@@ -8,20 +8,14 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  turbopack: {},
-  async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: [
-          {
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin-allow-popups",
-          },
-        ],
-      },
-    ];
+  output: 'export',
+  basePath: '/finly',
+  assetPrefix: '/finly/',
+  trailingSlash: true,
+  images: {
+    unoptimized: true
   },
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);

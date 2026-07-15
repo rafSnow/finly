@@ -8,6 +8,7 @@ import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { AccountsOverview } from "@/components/dashboard/AccountsOverview";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useDashboard } from "@/hooks/useDashboard";
+import { usePeriod } from "@/hooks/usePeriod";
 import { useGoals } from "@/hooks/useGoals";
 import { getCategories } from "@/lib/firestore/categories";
 import { Category, PeriodFilter } from "@/types";
@@ -20,11 +21,7 @@ import { AiInsights } from "@/components/dashboard/AiInsights";
 export default function Dashboard() {
   const { family } = useAuth();
 
-  const now = new Date();
-  const [period, setPeriod] = useState<PeriodFilter>({
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
-  });
+  const { period, setPeriod, mounted } = usePeriod();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -112,7 +109,7 @@ export default function Dashboard() {
         <>
           <AiInsights categoryNameMap={categoryNameMap} />
           <SummaryCards summary={summary} />
-          <AccountsOverview />
+          <AccountsOverview period={period} />
           <CategoryChart data={categoryBreakdown} />
           <GoalProgressList items={goalProgress} />
           <PartnerBreakdown data={partnerSummaries} />

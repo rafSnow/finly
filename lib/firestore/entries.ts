@@ -64,6 +64,9 @@ function mapEntryDoc(id: string, data: Record<string, unknown>): Entry {
         ? data.installmentCount
         : undefined,
     isCredit: Boolean(data.isCredit),
+    isTransfer: Boolean(data.isTransfer),
+    transferId: (data.transferId as string | undefined) ?? undefined,
+    destinationAccountId: (data.destinationAccountId as string | undefined) ?? undefined,
     createdAt: mapTimestampDate(data.createdAt),
   };
 }
@@ -100,6 +103,9 @@ function sanitizePartialEntry(
   }
   if (data.accountId) {
     sanitized.accountId = data.accountId;
+  }
+  if (data.destinationAccountId) {
+    sanitized.destinationAccountId = data.destinationAccountId;
   }
   if (data.date instanceof Date) {
     sanitized.date = data.date;
@@ -203,11 +209,13 @@ export async function createEntry(
       value: data.value,
       categoryId: data.categoryId,
       accountId: data.accountId,
+      destinationAccountId: data.destinationAccountId || null,
       date: Timestamp.fromDate(data.date),
       description: data.description?.trim() || "",
       ownerId,
       isRecurring: false,
       isCredit,
+      isTransfer: data.type === "transfer",
       createdAt: serverTimestamp(),
     });
   } catch (error) {
@@ -245,8 +253,9 @@ export async function createRecurringEntries(
         familyId,
         type: data.type,
         value: data.value,
-        categoryId: data.categoryId,
-        accountId: data.accountId,
+        categoryId: data.categoryId || null,
+        accountId: data.accountId || null,
+        destinationAccountId: data.destinationAccountId || null,
         date: Timestamp.fromDate(nextDate),
         description: data.description?.trim() || "",
         ownerId,
@@ -254,8 +263,9 @@ export async function createRecurringEntries(
         recurrenceIndex: i,
         isRecurring: !isInstallment, // Se for parcela, não é 'recurring' infinito/assinatura
         isInstallment,
-        installmentCount: isInstallment ? count : undefined,
+        installmentCount: isInstallment ? count : null,
         isCredit,
+        isTransfer: data.type === "transfer",
         createdAt: serverTimestamp(),
       });
     }

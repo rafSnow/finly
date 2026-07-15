@@ -18,6 +18,7 @@ import {
   updateCategory,
 } from "@/lib/firestore/categories";
 import { Category } from "@/types";
+import { getCategoryIcon } from "@/lib/utils/categoryIcons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -244,19 +245,39 @@ export default function Categorias() {
                   key={category.id}
                   className="flex items-center justify-between gap-3 border-b border-white/[0.05] py-3.5 last:border-0"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[#F1F0FF]">{category.name}</p>
-                    <span
-                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        category.type === "expense"
-                          ? "bg-red-500/10 text-red-400"
-                          : category.type === "income"
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : "bg-[#7C3AED]/10 text-[#8B5CF6]"
-                      }`}
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#1A1A26]"
                     >
-                      {TYPE_OPTIONS.find((option) => option.value === category.type)?.label}
-                    </span>
+                      {(() => {
+                        const Icon = getCategoryIcon(category.name, category.type === "income");
+                        return (
+                          <Icon 
+                            className={`h-5 w-5 ${
+                              category.type === "expense"
+                                ? "text-red-400"
+                                : category.type === "income"
+                                  ? "text-emerald-400"
+                                  : "text-[#8B5CF6]"
+                            }`} 
+                          />
+                        );
+                      })()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[#F1F0FF]">{category.name}</p>
+                      <span
+                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          category.type === "expense"
+                            ? "bg-red-500/10 text-red-400"
+                            : category.type === "income"
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-[#7C3AED]/10 text-[#8B5CF6]"
+                        }`}
+                      >
+                        {TYPE_OPTIONS.find((option) => option.value === category.type)?.label}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex gap-3">
                     <button

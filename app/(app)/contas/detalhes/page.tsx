@@ -3,17 +3,21 @@
 import { useAccounts, useAccountBalance } from "@/hooks/useAccounts";
 import { useEntries } from "@/hooks/useEntries";
 import { useAuth } from "@/hooks/useAuth";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { ArrowLeft, CreditCard, Wallet } from "lucide-react";
 import { EntryItem } from "@/components/lancamentos/EntryItem";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { useToast } from "@/hooks/useToast";
+import { usePeriod } from "@/hooks/usePeriod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createEntry } from "@/lib/firestore/entries";
+import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 
 const payInvoiceSchema = z.object({
   accountId: z.string().min(1, "Selecione uma conta"),
@@ -28,23 +32,22 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-export default function ContaDetailsPage() {
+function DetalhesContaContent() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
   const { accounts, loading: loadingAccounts } = useAccounts();
-  const account = accounts.find((a) => a.id === params?.id);
-  const { balance, loading: loadingBalance } = useAccountBalance(params?.id ?? "");
+  const account = accounts.find((a) => a.id === id);
+  const { balance, loading: loadingBalance } = useAccountBalance(id ?? "");
 
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
-  const [currentMonthState, setCurrentMonthState] = useState(new Date().getMonth() + 1); // for filters
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const { period, setPeriod, mounted } = usePeriod();
 
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const { family } = useAuth();
 
   const { entries, loading: loadingEntries, deleteEntry } = useEntries({
-    month: currentMonth,
-    year: currentYear,
+    month: period.month,
+    year: period.year,
   });
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PayInvoiceForm>({
@@ -54,16 +57,18 @@ export default function ContaDetailsPage() {
     }
   });
 
-  const accountEntries = entries.filter((e) => e.accountId === account?.id);
+  const accountEntries = entries.filter(
+    (e) => e.accountId === account?.id || e.destinationAccountId === account?.id
+  );
   const checkingAccounts = accounts.filter(a => a.accountType !== "credit");
 
   if (loadingAccounts) {
-    return <div className="p-8 text-[#A09DC0]">Carregando...</div>;
+    return <div className="py-8 text-[#A09DC0]">Carregando...</div>;
   }
 
   if (!account) {
     return (
-      <div className="p-8">
+      <div className="py-8">
         <p className="text-red-400 mb-4">Conta não encontrada.</p>
         <button onClick={() => router.push("/contas")} className="text-[#8B5CF6]">Voltar</button>
       </div>
@@ -77,10 +82,11 @@ export default function ContaDetailsPage() {
     if (!family?.id) return;
     try {
       await createEntry(family.id, {
-        type: "expense",
+        type: "transfer",
         value: totalFatura,
         categoryId: "", // maybe create a "Fatura de Cartão" category in the future
         accountId: values.accountId,
+        destinationAccountId: account.id,
         date: new Date(values.date),
         description: `Pagamento Fatura ${account.name}`,
       });
@@ -96,7 +102,7 @@ export default function ContaDetailsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col p-8">
+    <div className="space-y-4 pb-24">
       <div className="mb-8 flex items-center gap-4">
         <button
           onClick={() => router.push("/contas")}
@@ -131,6 +137,8 @@ export default function ContaDetailsPage() {
         )}
       </div>
 
+      <PeriodSelector value={period} onChange={setPeriod} />
+
       <div>
         <h2 className="mb-4 text-lg font-semibold text-[#F1F0FF]">Movimentações do Mês</h2>
         <div className="rounded-2xl border border-white/5 bg-[#111118] p-5">
@@ -144,7 +152,7 @@ export default function ContaDetailsPage() {
                 key={entry.id}
                 entry={entry}
                 categoryName="-"
-                onEdit={(e) => router.push(`/lancamentos/${e.id}/editar`)}
+                onEdit={(e) => router.push(`/lancamentos/editar?id=${e.id}`)}
                 onDelete={(e) => {
                   if (confirm("Excluir lançamento?")) {
                     deleteEntry(e.id, "this");
@@ -205,5 +213,13 @@ export default function ContaDetailsPage() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+export default function DetalhesConta() {
+  return (
+    <Suspense fallback={<div className="py-8 text-[#A09DC0]">Carregando...</div>}>
+      <DetalhesContaContent />
+    </Suspense>
   );
 }
