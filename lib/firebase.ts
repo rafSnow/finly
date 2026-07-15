@@ -11,6 +11,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+if (!firebaseConfig.apiKey) {
+  console.error(
+    "🔥 ERRO FATAL NO BUILD: A chave do Firebase (NEXT_PUBLIC_FIREBASE_API_KEY) está vazia!"
+  );
+  console.error(
+    "Para que o GitHub Actions consiga gerar o site, você precisa adicionar os Secrets no GitHub."
+  );
+  console.error(
+    "Vá em: Repositório > Settings > Secrets and variables > Actions > Repository secrets."
+  );
+}
+
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 let db: Firestore;
