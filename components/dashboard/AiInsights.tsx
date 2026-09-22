@@ -40,7 +40,7 @@ export function AiInsights({ categoryNameMap }: AiInsightsProps) {
           </p>
         )}
 
-        {!insight && !error && (
+        {!insight && (
           <button
             onClick={() => generateInsight(categoryNameMap)}
             disabled={loading}
@@ -54,7 +54,7 @@ export function AiInsights({ categoryNameMap }: AiInsightsProps) {
             ) : (
               <>
                 <Sparkles size={18} className="text-[#EC4899]" />
-                Gerar Insight
+                {error ? "Tentar novamente" : "Gerar Insight"}
               </>
             )}
           </button>

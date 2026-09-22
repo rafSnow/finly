@@ -63,11 +63,14 @@ export function useInsights() {
         Baseado nos dados acima, crie um insight inteligente. Seja conciso (máx. 150 palavras).
       `;
 
-      if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
-        throw new Error("A chave da API do Gemini não está configurada.");
+      const localKey = typeof window !== "undefined" ? localStorage.getItem("gemini_api_key") : null;
+      const apiKey = localKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+      if (!apiKey) {
+        throw new Error("A chave da API do Gemini não está configurada. Adicione a chave na tela de Importação.");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash-lite",
         contents: prompt,
