@@ -88,7 +88,8 @@ export default function ImportarExtratoPage() {
       showToast("Categorização via IA concluída!", "success");
     } catch (err) {
       console.error(err);
-      showToast("Erro ao categorizar com IA. Verifique sua chave da API.", "error");
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      showToast(`Erro da IA: ${msg}`, "error");
     } finally {
       setAiLoading(false);
     }
