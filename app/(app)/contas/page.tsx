@@ -194,13 +194,17 @@ export default function ContasPage() {
     setIsDeleteConfirmOpen(true);
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const handleConfirmDelete = async () => {
     if (accountToDelete) {
+      setIsDeleting(true);
       try {
         await deleteAccount(accountToDelete.id);
       } catch (error) {
         console.error("Erro ao excluir conta", error);
       } finally {
+        setIsDeleting(false);
         setIsDeleteConfirmOpen(false);
         setAccountToDelete(null);
       }
@@ -260,6 +264,7 @@ export default function ContasPage() {
         title="Excluir conta"
         description={`Tem certeza que deseja excluir a conta "${accountToDelete?.name}"? Esta ação não poderá ser desfeita.`}
         confirmLabel="Excluir"
+        loading={isDeleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => {
           setIsDeleteConfirmOpen(false);

@@ -108,8 +108,11 @@ function DetalhesContaContent() {
     }
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const handleConfirmDelete = async () => {
     if (entryToDelete) {
+      setIsDeleting(true);
       try {
         await deleteEntry(entryToDelete.id, "this");
         showToast("Lançamento excluído com sucesso!", "success");
@@ -117,6 +120,7 @@ function DetalhesContaContent() {
         console.error(error);
         showToast("Erro ao excluir lançamento.", "error");
       } finally {
+        setIsDeleting(false);
         setIsDeleteConfirmOpen(false);
         setEntryToDelete(null);
       }
@@ -200,6 +204,7 @@ function DetalhesContaContent() {
         title="Excluir lançamento"
         description="Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita."
         confirmLabel="Excluir"
+        loading={isDeleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => {
           setIsDeleteConfirmOpen(false);
