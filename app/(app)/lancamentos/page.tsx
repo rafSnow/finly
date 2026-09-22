@@ -5,6 +5,7 @@ import { RecurringScopeModal } from "@/components/lancamentos/RecurringScopeModa
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
 import { useAuth } from "@/hooks/useAuth";
@@ -267,28 +268,15 @@ export default function Lancamentos() {
         />
       ) : null}
 
-      <Modal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
+      <ConfirmModal
+        open={showDeleteConfirm}
         title="Excluir lançamento"
-      >
-        <p className="mb-4 text-sm text-[#A09DC0]">
-          Confirma a exclusão deste lançamento?
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="danger" loading={deleting} onClick={() => executeDelete("this")}
-          >
-            Excluir
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={deleting}
-            onClick={() => setShowDeleteConfirm(false)}
-          >
-            Cancelar
-          </Button>
-        </div>
-      </Modal>
+        description="Confirma a exclusão deste lançamento? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        loading={deleting}
+        onConfirm={() => executeDelete("this")}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
 
       <RecurringScopeModal
         isOpen={showRecurringDelete}

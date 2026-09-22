@@ -16,6 +16,7 @@ import { UploadCloud, CheckCircle, Trash2, ArrowLeft, Loader2 } from "lucide-rea
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/hooks/useToast";
 
 export default function ImportarExtratoPage() {
   const router = useRouter();
@@ -46,6 +47,8 @@ export default function ImportarExtratoPage() {
     if (savedKey) setGeminiKey(savedKey);
   }, []);
 
+  const { showToast } = useToast();
+
   const handleCategorizeAI = async (keyToUse: string) => {
     const apiKey = keyToUse || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
@@ -66,7 +69,7 @@ export default function ImportarExtratoPage() {
       }));
       
       if (unmapped.length === 0) {
-        alert("Todas as transações já possuem categoria ou não há nada para categorizar!");
+        showToast("Todas as transações já possuem categoria ou não há nada para categorizar!", "info");
         setAiLoading(false);
         return;
       }
@@ -81,9 +84,10 @@ export default function ImportarExtratoPage() {
       }));
       
       setShowApiKeyModal(false);
+      showToast("Categorização via IA concluída!", "success");
     } catch (err) {
       console.error(err);
-      alert("Erro ao categorizar com IA. Verifique sua chave da API.");
+      showToast("Erro ao categorizar com IA. Verifique sua chave da API.", "error");
     } finally {
       setAiLoading(false);
     }
@@ -103,7 +107,7 @@ export default function ImportarExtratoPage() {
       } else if (file.name.toLowerCase().endsWith(".csv")) {
         entries = await parseCSV(text);
       } else {
-        alert("Formato não suportado. Por favor, envie um .ofx ou .csv.");
+        showToast("Formato não suportado. Por favor, envie um .ofx ou .csv.", "error");
         return;
       }
 
@@ -116,7 +120,7 @@ export default function ImportarExtratoPage() {
       setStep(2);
     } catch (err) {
       console.error(err);
-      alert("Erro ao processar o arquivo.");
+      showToast("Erro ao processar o arquivo.", "error");
     } finally {
       setLoading(false);
     }
@@ -140,7 +144,7 @@ export default function ImportarExtratoPage() {
 
   const handleSave = async () => {
     if (!accountId) {
-      alert("Selecione uma conta para atribuir estes lançamentos.");
+      showToast("Selecione uma conta para atribuir estes lançamentos.", "info");
       return;
     }
 
@@ -162,10 +166,11 @@ export default function ImportarExtratoPage() {
       }));
 
       await addBatch(payload);
+      showToast("Lançamentos importados com sucesso!", "success");
       router.push("/lancamentos");
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar lançamentos.");
+      showToast("Erro ao salvar lançamentos.", "error");
       setLoading(false);
     }
   };
@@ -204,7 +209,7 @@ export default function ImportarExtratoPage() {
           </div>
 
           <div 
-            onClick={() => accountId ? fileInputRef.current?.click() : alert('Selecione uma conta primeiro')}
+            onClick={() => accountId ? fileInputRef.current?.click() : showToast('Selecione uma conta primeiro', 'info')}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-colors ${accountId ? 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10' : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'}`}
           >
             <UploadCloud size={48} className="mb-4 text-[#8B5CF6]" />
