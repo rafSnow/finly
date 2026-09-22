@@ -4,13 +4,7 @@ import { useDashboard } from "./useDashboard";
 import { useGoals } from "./useGoals";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
-import { CategoryBreakdown } from "@/types";
 import { GoogleGenAI } from "@google/genai";
-
-interface InsightResponse {
-  insight?: string;
-  error?: string;
-}
 
 export function useInsights() {
   const { family } = useAuth();
@@ -58,11 +52,11 @@ export function useInsights() {
         - Saldo Restante: R$ ${summary.balance}
 
         DESPESAS POR CATEGORIA:
-        ${formattedBreakdown.map((c: any) => `- ${c.categoryName}: R$ ${c.total}`).join("\n")}
+        ${formattedBreakdown.map((c: { categoryName: string, total: number }) => `- ${c.categoryName}: R$ ${c.total}`).join("\n")}
 
         STATUS DAS METAS ESTABELECIDAS:
         ${goalsProgress.length > 0 
-          ? goalsProgress.map((g: any) => `- ${g.categoryName}: Gasto R$ ${g.spent} (Meta: R$ ${g.goalLimit}) - ${g.progress.toFixed(0)}% utilizado.`).join("\n")
+          ? goalsProgress.map((g: { categoryName: string, spent: number, goalLimit: number, progress: number }) => `- ${g.categoryName}: Gasto R$ ${g.spent} (Meta: R$ ${g.goalLimit}) - ${g.progress.toFixed(0)}% utilizado.`).join("\n")
           : "O usuário não definiu metas mensais ainda."
         }
 
@@ -82,8 +76,12 @@ export function useInsights() {
       if (response.text) {
         setInsight(response.text);
       }
-    } catch (err: any) {
-      setError(err.message || "Erro de conexão com o Assistente.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || "Erro de conexão com o Assistente.");
+      } else {
+        setError("Erro de conexão com o Assistente.");
+      }
     } finally {
       setLoading(false);
     }

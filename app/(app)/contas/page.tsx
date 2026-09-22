@@ -133,6 +133,7 @@ export default function ContasPage() {
     formState: { errors, isSubmitting },
     watch,
   } = useForm<AccountFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(accountSchema) as any,
   });
 

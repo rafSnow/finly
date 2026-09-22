@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { Account, Entry } from "@/types";
+import { Account } from "@/types";
 import {
   collection,
   getDocs,

@@ -31,7 +31,7 @@ if (typeof window !== 'undefined') {
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
-  } catch (error) {
+  } catch {
     // If it fails (e.g. multiple tabs not supported or already initialized), fallback to standard
     db = getFirestore(app);
   }

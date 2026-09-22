@@ -7,9 +7,7 @@ import {
   getSummary,
 } from "@/lib/firestore/dashboard";
 import {
-  CategoryBreakdown,
   DashboardSummary,
-  PartnerSummary,
   PeriodFilter,
 } from "@/types";
 import { useQuery } from "@tanstack/react-query";

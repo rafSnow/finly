@@ -10,16 +10,16 @@ import {
   Plane, 
   Coffee, 
   Briefcase, 
-  Folder, 
   CircleDollarSign,
   Shirt,
   Smartphone,
   Gift,
   ArrowUpCircle,
-  ArrowDownCircle
+  ArrowDownCircle,
+  LucideIcon
 } from "lucide-react";
 
-const categoryIconsMap: Record<string, any> = {
+const categoryIconsMap: Record<string, LucideIcon> = {
   "casa": Home,
   "moradia": Home,
   "aluguel": Home,

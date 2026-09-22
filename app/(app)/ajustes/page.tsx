@@ -23,6 +23,39 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
+}
+
+// --- Hook do PWA ---
+function usePwaInstall() {
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const promptInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log("Install outcome:", outcome);
+    setDeferredPrompt(null);
+  };
+
+  return { deferredPrompt, promptInstall };
+}
+
 const passwordSchema = z.object({
   newPassword: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres."),
   confirmNewPassword: z.string().min(1, "Confirmação é obrigatória.")
@@ -59,6 +92,8 @@ export default function Ajustes() {
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(user?.displayName ?? "");
   const [savingName, setSavingName] = useState(false);
+
+  const { deferredPrompt, promptInstall } = usePwaInstall();
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [sendingInvite, setSendingInvite] = useState(false);
@@ -373,6 +408,20 @@ export default function Ajustes() {
           </div>
         )}
       </Card>
+
+      {deferredPrompt && (
+        <Card>
+          <h3 className="text-sm font-semibold text-[#F1F0FF] mb-3">Aplicativo</h3>
+          <div className="mt-3">
+            <p className="text-sm text-[#A09DC0] mb-3">
+              Instale o Finly no seu dispositivo para ter uma experiência mais rápida, semelhante a um app nativo, e acesso offline parcial.
+            </p>
+            <Button variant="secondary" onClick={promptInstall}>
+              Instalar App
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <h3 className="text-sm font-semibold text-[#F1F0FF] mb-3">Conta</h3>

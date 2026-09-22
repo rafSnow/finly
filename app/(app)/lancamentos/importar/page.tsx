@@ -8,6 +8,9 @@ import { Category } from "@/types";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useEntries } from "@/hooks/useEntries";
 import { parseCSV, parseOFX, guessCategory, DraftEntry } from "@/lib/utils/importParser";
+import { categorizeTransactionsWithAI } from "@/lib/utils/aiCategorizer";
+import { Modal } from "@/components/ui/Modal";
+import { Sparkles } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { UploadCloud, CheckCircle, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -34,6 +37,57 @@ export default function ImportarExtratoPage() {
   const [drafts, setDrafts] = useState<DraftEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [geminiKey, setGeminiKey] = useState("");
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem("gemini_api_key");
+    if (savedKey) setGeminiKey(savedKey);
+  }, []);
+
+  const handleCategorizeAI = async (keyToUse: string) => {
+    const apiKey = keyToUse || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    
+    if (keyToUse && keyToUse !== process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      localStorage.setItem("gemini_api_key", keyToUse);
+    }
+
+    setAiLoading(true);
+    try {
+      const unmapped = drafts.filter(d => !d.categoryId).map(d => ({
+        id: d.id,
+        description: d.description,
+        type: d.type
+      }));
+      
+      if (unmapped.length === 0) {
+        alert("Todas as transações já possuem categoria ou não há nada para categorizar!");
+        setAiLoading(false);
+        return;
+      }
+
+      const mapping = await categorizeTransactionsWithAI(unmapped, categories, apiKey);
+      
+      setDrafts(prev => prev.map(d => {
+        if (mapping[d.id]) {
+          return { ...d, categoryId: mapping[d.id] };
+        }
+        return d;
+      }));
+      
+      setShowApiKeyModal(false);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao categorizar com IA. Verifique sua chave da API.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -184,14 +238,24 @@ export default function ImportarExtratoPage() {
             <p className="text-sm font-medium text-[#A09DC0]">
               <span className="font-bold text-[#F1F0FF]">{selectedCount}</span> transações selecionadas
             </p>
-            <button
-              onClick={handleSave}
-              disabled={loading || selectedCount === 0}
-              className="flex items-center justify-center gap-2 rounded-xl bg-[#8B5CF6] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#7C3AED] disabled:opacity-50"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-              Importar Lançamentos
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleCategorizeAI(geminiKey)}
+                disabled={aiLoading || drafts.length === 0}
+                className="flex items-center justify-center gap-2 rounded-xl border border-[#8B5CF6]/50 bg-[#8B5CF6]/10 px-4 py-2.5 text-sm font-medium text-[#8B5CF6] transition-colors hover:bg-[#8B5CF6]/20 disabled:opacity-50"
+              >
+                {aiLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                <span className="hidden sm:inline">Categorizar com IA</span>
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading || selectedCount === 0}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#8B5CF6] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#7C3AED] disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                Importar Lançamentos
+              </button>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
@@ -260,6 +324,35 @@ export default function ImportarExtratoPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        title="Chave da API do Google Gemini"
+      >
+        <div className="space-y-4 px-1 pb-2 mt-4">
+          <p className="text-sm text-[#A09DC0]">
+            Para usar a categorização inteligente, informe sua chave de API do Google Gemini. Ela será salva apenas no seu navegador.
+          </p>
+          <Input
+            label="API Key"
+            type="password"
+            value={geminiKey}
+            onChange={(e) => setGeminiKey(e.target.value)}
+            placeholder="AIzaSy..."
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleCategorizeAI(geminiKey)}
+              disabled={!geminiKey}
+              className="flex-1 rounded-xl bg-[#8B5CF6] py-2 font-medium text-white hover:bg-[#7C3AED] disabled:opacity-50"
+            >
+              Salvar e Categorizar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }

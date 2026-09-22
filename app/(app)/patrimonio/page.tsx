@@ -1,7 +1,7 @@
 "use client";
 
 import { usePatrimonio } from "@/hooks/usePatrimonio";
-import { TrendingUp, Wallet, ArrowUpCircle } from "lucide-react";
+import { TrendingUp, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import Link from "next/link";

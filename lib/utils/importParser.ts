@@ -59,13 +59,16 @@ export function parseCSV(text: string): Promise<DraftEntry[]> {
       complete: (results) => {
         const transactions: DraftEntry[] = [];
         
-        results.data.forEach((row: any) => {
-          const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('data') || k.toLowerCase().includes('date'));
-          const descKey = Object.keys(row).find(k => k.toLowerCase().includes('desc') || k.toLowerCase().includes('hist') || k.toLowerCase().includes('memo'));
-          const valKey = Object.keys(row).find(k => k.toLowerCase().includes('valor') || k.toLowerCase().includes('amount'));
+        results.data.forEach((row: unknown) => {
+          if (!row || typeof row !== 'object') return;
+          const typedRow = row as Record<string, string | number>;
+          
+          const dateKey = Object.keys(typedRow).find(k => k.toLowerCase().includes('data') || k.toLowerCase().includes('date'));
+          const descKey = Object.keys(typedRow).find(k => k.toLowerCase().includes('desc') || k.toLowerCase().includes('hist') || k.toLowerCase().includes('memo'));
+          const valKey = Object.keys(typedRow).find(k => k.toLowerCase().includes('valor') || k.toLowerCase().includes('amount'));
 
           if (dateKey && descKey && valKey) {
-            let dateStr = row[dateKey];
+            let dateStr = String(typedRow[dateKey]);
             if (dateStr.includes('/')) {
               const parts = dateStr.split('/');
               if (parts.length === 3) {
@@ -73,7 +76,7 @@ export function parseCSV(text: string): Promise<DraftEntry[]> {
               }
             }
 
-            let valStr = String(row[valKey]).replace(',', '.');
+            const valStr = String(typedRow[valKey]).replace(',', '.');
             const rawValue = parseFloat(valStr);
             if (isNaN(rawValue)) return;
 
@@ -83,7 +86,7 @@ export function parseCSV(text: string): Promise<DraftEntry[]> {
             transactions.push({
               id: Math.random().toString(36).substring(7),
               date: dateStr,
-              description: row[descKey],
+              description: String(typedRow[descKey]),
               value,
               type,
               selected: true,
@@ -93,7 +96,7 @@ export function parseCSV(text: string): Promise<DraftEntry[]> {
 
         resolve(transactions);
       },
-      error: (err: any) => reject(err),
+      error: (err: Error) => reject(err),
     });
   });
 }
@@ -101,7 +104,7 @@ export function parseCSV(text: string): Promise<DraftEntry[]> {
 export function guessCategory(description: string, categories: Category[]): string | undefined {
   const descLower = description.toLowerCase();
   
-  let match = categories.find(c => descLower.includes(c.name.toLowerCase()));
+  const match = categories.find(c => descLower.includes(c.name.toLowerCase()));
   if (match) return match.id;
 
   const keywords: Record<string, string[]> = {

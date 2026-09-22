@@ -11,7 +11,7 @@ export function usePeriod() {
       if (saved) {
         try {
           return JSON.parse(saved) as PeriodFilter;
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -29,13 +29,14 @@ export function usePeriod() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const saved = localStorage.getItem("finly_last_period");
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as PeriodFilter;
         setPeriod(parsed);
-      } catch (e) {
+      } catch {
         // ignore
       }
     }

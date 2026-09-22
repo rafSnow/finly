@@ -13,25 +13,30 @@ interface EntryItemProps {
   onDelete: (entry: Entry) => void;
 }
 
+import React from "react";
+
+function CategoryIconRenderer({ categoryName, isIncome, className }: { categoryName: string; isIncome: boolean; className?: string }) {
+  const iconComponent = getCategoryIcon(categoryName, isIncome);
+  return React.createElement(iconComponent, { className });
+}
+
 export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemProps) {
   const isIncome = entry.type === "income";
   const isTransfer = entry.type === "transfer" || entry.isTransfer;
   const controls = useAnimation();
 
   const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const threshold = -60; // if dragged more than 60px to the left, snap open
+    const threshold = -60;
     if (info.offset.x < threshold) {
-      controls.start({ x: -120 }); // reveal both buttons (60px each)
+      controls.start({ x: -120 });
     } else {
-      controls.start({ x: 0 }); // snap closed
+      controls.start({ x: 0 });
     }
   };
 
   const closeActions = () => {
     controls.start({ x: 0 });
   };
-
-  const Icon = getCategoryIcon(categoryName, isIncome);
 
   return (
     <div className="relative border-b border-white/[0.05] last:border-0 overflow-hidden">
@@ -72,7 +77,7 @@ export function EntryItem({ entry, categoryName, onEdit, onDelete }: EntryItemPr
           {isTransfer ? (
             <ArrowRightLeft className="h-5 w-5 text-indigo-400" />
           ) : (
-            <Icon className={`h-5 w-5 ${isIncome ? "text-emerald-400" : "text-red-400"}`} />
+            <CategoryIconRenderer categoryName={categoryName} isIncome={isIncome} className={`h-5 w-5 ${isIncome ? "text-emerald-400" : "text-red-400"}`} />
           )}
         </div>
         <div className="min-w-0 flex-1">
