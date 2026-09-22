@@ -8,6 +8,7 @@ import { Category } from "@/types";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useEntries } from "@/hooks/useEntries";
 import { parseCSV, parseOFX, guessCategory, DraftEntry } from "@/lib/utils/importParser";
+import { getEntriesByDateRange } from "@/lib/firestore/entries";
 import { categorizeTransactionsWithAI } from "@/lib/utils/aiCategorizer";
 import { Modal } from "@/components/ui/Modal";
 import { Sparkles } from "lucide-react";
@@ -96,22 +97,54 @@ export default function ImportarExtratoPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!family?.id) {
+      showToast("Família não encontrada.", "error");
+      return;
+    }
 
     setLoading(true);
     try {
       const text = await file.text();
-      let entries: DraftEntry[] = [];
+      let parsedEntries: DraftEntry[] = [];
       
       if (file.name.toLowerCase().endsWith(".ofx")) {
-        entries = parseOFX(text);
+        parsedEntries = parseOFX(text);
       } else if (file.name.toLowerCase().endsWith(".csv")) {
-        entries = await parseCSV(text);
+        parsedEntries = await parseCSV(text);
       } else {
         showToast("Formato não suportado. Por favor, envie um .ofx ou .csv.", "error");
         return;
       }
 
-      const entriesWithCategories = entries.map(e => ({
+      if (parsedEntries.length > 0) {
+        const dates = parsedEntries.map(d => new Date(d.date + "T12:00:00").getTime());
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+
+        minDate.setHours(0, 0, 0, 0);
+        maxDate.setHours(23, 59, 59, 999);
+
+        const existingEntries = await getEntriesByDateRange(family.id, minDate, maxDate, accountId);
+        
+        parsedEntries = parsedEntries.filter(draft => {
+          const isDuplicate = existingEntries.some(existing => {
+            const existingDate = existing.date.toISOString().split("T")[0];
+            return existingDate === draft.date &&
+                   existing.description === draft.description &&
+                   existing.value === draft.value;
+          });
+          return !isDuplicate;
+        });
+      }
+
+      if (parsedEntries.length === 0) {
+        showToast("Nenhuma nova transação encontrada (todas já foram importadas ou o arquivo está vazio).", "info");
+        setLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      const entriesWithCategories = parsedEntries.map(e => ({
         ...e,
         categoryId: guessCategory(e.description, categories)
       }));

@@ -171,6 +171,32 @@ export async function getEntries(
   }
 }
 
+export async function getEntriesByDateRange(
+  familyId: string,
+  startDate: Date,
+  endDate: Date,
+  accountId: string
+): Promise<Entry[]> {
+  try {
+    const constraints: QueryConstraint[] = [
+      where("date", ">=", Timestamp.fromDate(startDate)),
+      where("date", "<=", Timestamp.fromDate(endDate)),
+    ];
+
+    const entriesQuery = query(
+      collection(db, "families", familyId, "entries"),
+      ...constraints,
+    );
+    const snapshot = await getDocs(entriesQuery);
+    return snapshot.docs
+      .map((entryDoc) => mapEntryDoc(entryDoc.id, entryDoc.data()))
+      .filter((entry) => entry.accountId === accountId || entry.destinationAccountId === accountId);
+  } catch (error) {
+    console.error("Erro ao buscar lançamentos por período:", error);
+    throw error;
+  }
+}
+
 export async function getEntryById(
   familyId: string,
   entryId: string,
