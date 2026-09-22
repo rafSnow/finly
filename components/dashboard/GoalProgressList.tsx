@@ -1,5 +1,7 @@
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Goal } from "@/types";
 import { formatCurrency } from "@/lib/utils/format";
+import Link from "next/link";
 
 type GoalProgress = {
   goal: Goal;
@@ -17,7 +19,14 @@ export function GoalProgressList({ items }: GoalProgressListProps) {
     <div className="mb-5 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
       <h3 className="mb-3 text-sm font-semibold text-[#F1F0FF]">Progresso das metas</h3>
       {items.length === 0 ? (
-        <p className="text-sm text-[#6B6890]">Nenhuma meta cadastrada.</p>
+        <EmptyState
+          title="Nenhuma meta cadastrada"
+          description="Crie metas para controlar seus gastos em diferentes categorias"
+          action={{
+            label: "Criar meta",
+            onClick: () => { window.location.href = "/metas" }
+          }}
+        />
       ) : (
         <div>
           {items.map(({ goal, categoryName, spent, progress }) => {

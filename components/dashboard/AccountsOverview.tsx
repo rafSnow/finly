@@ -2,6 +2,8 @@ import { useAccounts, useAccountBalance } from "@/hooks/useAccounts";
 import { useEntries } from "@/hooks/useEntries";
 import { Account, PeriodFilter } from "@/types";
 import { CreditCard, Wallet } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -43,17 +45,30 @@ function AccountRow({ account, period }: { account: Account; period: PeriodFilte
 export function AccountsOverview({ period }: { period: PeriodFilter }) {
   const { accounts, loading } = useAccounts();
 
-  if (loading) return null;
-  if (accounts.length === 0) return null;
-
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+    <div className="mb-5 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
       <h3 className="mb-4 text-sm font-medium text-[#A09DC0]">Minhas Contas</h3>
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton variant="line" height="h-8" />
+          <Skeleton variant="line" height="h-8" />
+        </div>
+      ) : accounts.length === 0 ? (
+        <EmptyState
+          title="Nenhuma conta"
+          description="Você ainda não tem contas cadastradas."
+          action={{
+            label: "Adicionar Conta",
+            onClick: () => { window.location.href = "/contas" }
+          }}
+        />
+      ) : (
       <div className="space-y-1 divide-y divide-white/5">
         {accounts.map((account) => (
           <AccountRow key={account.id} account={account} period={period} />
         ))}
       </div>
+      )}
     </div>
   );
 }

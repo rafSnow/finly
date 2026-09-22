@@ -1,5 +1,6 @@
 import { PartnerSummary } from "@/types";
 import { formatCurrency, formatPercentage } from "@/lib/utils/format";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type PartnerBreakdownProps = {
   data: PartnerSummary[];
@@ -10,7 +11,10 @@ export function PartnerBreakdown({ data }: PartnerBreakdownProps) {
     <div className="mb-5 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
       <h3 className="mb-3 text-sm font-semibold text-[#F1F0FF]">Resumo por parceiro</h3>
       {data.length === 0 ? (
-        <p className="text-sm text-[#6B6890]">Sem dados para o periodo selecionado.</p>
+        <EmptyState
+          title="Sem dados"
+          description="Nenhum lançamento no período selecionado para calcular a divisão."
+        />
       ) : (
         <div className="space-y-2">
           {data.map((partner) => (
