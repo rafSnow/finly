@@ -17,12 +17,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { Controller } from "react-hook-form";
 
 const goalSchema = z.object({
   categoryId: z.string().min(1, "Selecione uma categoria."),
-  limit: z.number().positive("Informe um valor de limite valido."),
+  limitInput: z.string().min(1, "Informe o limite."),
 });
 type GoalFormValues = z.infer<typeof goalSchema>;
+
+function parseCurrencyToNumber(value: string): number {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return 0;
+  return Number(digits) / 100;
+}
 
 export default function Metas() {
   const { family } = useAuth();
@@ -41,10 +48,11 @@ export default function Metas() {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<GoalFormValues>({
     resolver: zodResolver(goalSchema),
-    defaultValues: { categoryId: "", limit: undefined },
+    defaultValues: { categoryId: "", limitInput: "" },
   });
 
   useEffect(() => {
@@ -76,13 +84,13 @@ export default function Metas() {
 
   const openCreateModal = () => {
     setEditingGoal(null);
-    reset({ categoryId: "", limit: undefined });
+    reset({ categoryId: "", limitInput: formatCurrency(0) });
     setIsModalOpen(true);
   };
 
   const openEditModal = (goal: Goal) => {
     setEditingGoal(goal);
-    reset({ categoryId: goal.categoryId, limit: goal.limit });
+    reset({ categoryId: goal.categoryId, limitInput: formatCurrency(goal.limit) });
     setIsModalOpen(true);
   };
 
@@ -93,17 +101,23 @@ export default function Metas() {
 
   const onFormSubmit = async (values: GoalFormValues) => {
     try {
+      const limitVal = parseCurrencyToNumber(values.limitInput);
+      if (limitVal <= 0) {
+        showToast("O limite deve ser maior que zero.", "info");
+        return;
+      }
+
       if (editingGoal) {
         await updateGoal(editingGoal.id, {
           categoryId: values.categoryId,
-          limit: values.limit,
+          limit: limitVal,
           period: "monthly",
         });
         showToast("Meta salva com sucesso", "success");
       } else {
         await createGoal({
           categoryId: values.categoryId,
-          limit: values.limit,
+          limit: limitVal,
           period: "monthly",
         });
         showToast("Meta salva com sucesso", "success");
@@ -213,14 +227,22 @@ export default function Metas() {
             error={errors.categoryId?.message}
           />
 
-          <Input
-            label="Limite mensal"
-            type="number"
-            min={0}
-            step="0.01"
-            {...register("limit", { valueAsNumber: true })}
-            error={errors.limit?.message}
+          <label className="mb-1.5 block text-center text-sm font-medium text-[#A09DC0]">Limite mensal</label>
+          <Controller
+            name="limitInput"
+            control={control}
+            render={({ field }) => (
+              <input
+                {...field}
+                onChange={(e) => {
+                  const val = parseCurrencyToNumber(e.target.value);
+                  field.onChange(formatCurrency(val));
+                }}
+                className="mb-6 w-full border-b-2 border-white/10 bg-transparent py-3 text-center text-4xl font-bold text-[#F1F0FF] outline-none transition-colors duration-200 focus:border-[#7C3AED]"
+              />
+            )}
           />
+          {errors.limitInput ? <p className="mb-4 text-center text-sm text-red-400">{errors.limitInput.message}</p> : null}
 
           <div className="mt-6 grid grid-cols-2 gap-2">
             <Button type="submit" loading={isSubmitting}>
@@ -241,7 +263,8 @@ export default function Metas() {
       <ConfirmModal
         open={Boolean(deletingGoalId)}
         title="Excluir meta"
-        description="Deseja excluir esta meta?"
+        description="Tem certeza que deseja excluir esta meta? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setDeletingGoalId(null)}
