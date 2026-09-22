@@ -69,7 +69,7 @@ export function useInsights() {
 
       const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: prompt,
       });
 
