@@ -16,6 +16,11 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createEntry } from "@/lib/firestore/entries";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/hooks/useToast";
+import { Entry } from "@/types";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 
 const payInvoiceSchema = z.object({
@@ -42,7 +47,11 @@ function DetalhesContaContent() {
   const { period, setPeriod, mounted } = usePeriod();
 
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<Entry | null>(null);
+  
   const { family } = useAuth();
+  const { showToast } = useToast();
 
   const { entries, loading: loadingEntries, deleteEntry } = useEntries({
     month: period.month,
@@ -90,13 +99,27 @@ function DetalhesContaContent() {
         description: `Pagamento Fatura ${account.name}`,
       });
 
-      // Aqui poderíamos marcar os entries como 'pagos', mas para MVP, o lançamento na corrente já regula o saldo real.
       setIsPayModalOpen(false);
       reset();
-      alert("Fatura paga com sucesso!");
+      showToast("Fatura paga com sucesso!", "success");
     } catch (error) {
       console.error(error);
-      alert("Erro ao pagar fatura.");
+      showToast("Erro ao pagar fatura.", "error");
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (entryToDelete) {
+      try {
+        await deleteEntry(entryToDelete.id, "this");
+        showToast("Lançamento excluído com sucesso!", "success");
+      } catch (error) {
+        console.error(error);
+        showToast("Erro ao excluir lançamento.", "error");
+      } finally {
+        setIsDeleteConfirmOpen(false);
+        setEntryToDelete(null);
+      }
     }
   };
 
@@ -142,9 +165,19 @@ function DetalhesContaContent() {
         <h2 className="mb-4 text-lg font-semibold text-[#F1F0FF]">Movimentações do Mês</h2>
         <div className="rounded-2xl border border-white/5 bg-[#111118] p-5">
           {loadingEntries ? (
-            <p className="text-[#A09DC0]">Carregando...</p>
+            <div className="space-y-2">
+              <Skeleton variant="line" height="h-16" />
+              <Skeleton variant="line" height="h-16" />
+            </div>
           ) : accountEntries.length === 0 ? (
-            <p className="text-[#A09DC0]">Nenhuma movimentação encontrada neste mês.</p>
+            <EmptyState
+              title="Nenhuma movimentação neste mês"
+              description="Você ainda não adicionou nenhum lançamento para esta conta."
+              action={{
+                label: "Novo Lançamento",
+                onClick: () => router.push("/lancamentos/novo")
+              }}
+            />
           ) : (
             accountEntries.map((entry) => (
               <EntryItem
@@ -153,15 +186,26 @@ function DetalhesContaContent() {
                 categoryName="-"
                 onEdit={(e) => router.push(`/lancamentos/editar?id=${e.id}`)}
                 onDelete={(e) => {
-                  if (confirm("Excluir lançamento?")) {
-                    deleteEntry(e.id, "this");
-                  }
+                  setEntryToDelete(e);
+                  setIsDeleteConfirmOpen(true);
                 }}
               />
             ))
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        open={isDeleteConfirmOpen}
+        title="Excluir lançamento"
+        description="Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setIsDeleteConfirmOpen(false);
+          setEntryToDelete(null);
+        }}
+      />
 
       <Modal
         isOpen={isPayModalOpen}

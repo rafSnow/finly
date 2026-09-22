@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useAccounts, useAccountBalance } from "@/hooks/useAccounts";
 import { Account } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -126,6 +127,9 @@ export default function ContasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -185,12 +189,20 @@ export default function ContasPage() {
     }
   };
 
-  const handleDelete = async (account: Account) => {
-    if (window.confirm(`Tem certeza que deseja excluir a conta "${account.name}"?`)) {
+  const handleDelete = (account: Account) => {
+    setAccountToDelete(account);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (accountToDelete) {
       try {
-        await deleteAccount(account.id);
+        await deleteAccount(accountToDelete.id);
       } catch (error) {
         console.error("Erro ao excluir conta", error);
+      } finally {
+        setIsDeleteConfirmOpen(false);
+        setAccountToDelete(null);
       }
     }
   };
@@ -242,6 +254,18 @@ export default function ContasPage() {
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        open={isDeleteConfirmOpen}
+        title="Excluir conta"
+        description={`Tem certeza que deseja excluir a conta "${accountToDelete?.name}"? Esta ação não poderá ser desfeita.`}
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setIsDeleteConfirmOpen(false);
+          setAccountToDelete(null);
+        }}
+      />
 
       <Modal
         isOpen={isModalOpen}
