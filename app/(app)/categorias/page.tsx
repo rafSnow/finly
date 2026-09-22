@@ -129,12 +129,12 @@ export default function Categorias() {
         });
       }
       setIsModalOpen(false);
-      showToast("Categoria salva", "success");
+      showToast("Categoria salva com sucesso!", "success");
       await loadCategories();
     } catch (saveError) {
       console.error("Erro ao salvar categoria:", saveError);
       setError("Não foi possível salvar a categoria.");
-      showToast("Nao foi possivel salvar a categoria.", "error");
+      showToast("Não foi possível salvar a categoria.", "error");
     }
   };
 
@@ -153,17 +153,17 @@ export default function Categorias() {
       const result = await deleteCategory(family.id, categoryToDelete.id);
       if (!result.success && result.reason === "has_entries") {
         setError("Esta categoria possui lançamentos e não pode ser excluída");
-        showToast("Esta categoria possui lancamentos e nao pode ser excluida", "error");
+        showToast("Esta categoria possui lançamentos e não pode ser excluída.", "error");
         return;
       }
 
-      showToast("Categoria excluida", "success");
+      showToast("Categoria excluída com sucesso!", "success");
       setCategoryToDelete(null);
       await loadCategories();
     } catch (deleteError) {
       console.error("Erro ao excluir categoria:", deleteError);
       setError("Não foi possível excluir a categoria.");
-      showToast("Nao foi possivel excluir a categoria.", "error");
+      showToast("Não foi possível excluir a categoria.", "error");
     } finally {
       setDeleting(false);
     }
@@ -237,7 +237,9 @@ export default function Categorias() {
       ) : (
         <Card>
           {filteredCategories.length === 0 ? (
-            <p className="text-sm text-[#6B6890]">Nenhuma categoria neste filtro.</p>
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <p className="text-sm text-[#A09DC0]">Nenhuma categoria encontrada neste filtro.</p>
+            </div>
           ) : (
             <ul>
               {filteredCategories.map((category) => (
@@ -339,7 +341,7 @@ export default function Categorias() {
       <ConfirmModal
         open={Boolean(categoryToDelete)}
         title="Excluir categoria"
-        description={categoryToDelete ? `Deseja excluir a categoria \"${categoryToDelete.name}\"?` : "Deseja excluir esta categoria?"}
+        description={categoryToDelete ? `Tem certeza que deseja excluir a categoria "${categoryToDelete.name}"? Esta ação não pode ser desfeita.` : "Tem certeza que deseja excluir esta categoria? Esta ação não pode ser desfeita."}
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setCategoryToDelete(null)}
