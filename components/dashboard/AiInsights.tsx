@@ -1,7 +1,7 @@
 "use client";
 
 import { useInsights } from "@/hooks/useInsights";
-import { Sparkles, Loader2, AlertCircle } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 
 interface AiInsightsProps {
   categoryNameMap: Map<string, string>;
@@ -13,16 +13,31 @@ export function AiInsights({ categoryNameMap }: AiInsightsProps) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-[#111118] to-[#181124] p-6 shadow-2xl">
       <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#7C3AED]/20 blur-3xl" />
-      
+
       <div className="relative z-10 flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7C3AED] to-[#EC4899] text-white shadow-lg">
-            <Sparkles size={20} />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7C3AED] to-[#EC4899] text-white shadow-lg">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-[#F1F0FF]">Consultor Finly AI</h3>
+              <p className="text-xs text-[#A09DC0]">Análise inteligente do seu mês</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-[#F1F0FF]">Consultor Finly AI</h3>
-            <p className="text-xs text-[#A09DC0]">Análise inteligente do seu mês</p>
-          </div>
+
+          {insight && (
+            <button
+              type="button"
+              onClick={() => generateInsight(categoryNameMap)}
+              disabled={loading}
+              title="Atualizar análise"
+              className="flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-medium text-[#A09DC0] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Atualizar</span>
+            </button>
+          )}
         </div>
 
         {error ? (

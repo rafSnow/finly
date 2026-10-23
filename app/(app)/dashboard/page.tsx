@@ -6,6 +6,7 @@ import { PartnerBreakdown } from "@/components/dashboard/PartnerBreakdown";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { AccountsOverview } from "@/components/dashboard/AccountsOverview";
+import { Rule503020Card } from "@/components/dashboard/Rule503020Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCategories } from "@/hooks/useCategories";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -76,6 +77,7 @@ export default function Dashboard() {
         <>
           <AiInsights categoryNameMap={categoryNameMap} />
           <SummaryCards summary={summary} />
+          <Rule503020Card summary={summary} categoryBreakdown={categoryBreakdown} />
           <AccountsOverview period={period} />
           <CategoryChart data={categoryBreakdown} />
           <GoalProgressList items={goalProgress} />

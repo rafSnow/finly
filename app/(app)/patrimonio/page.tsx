@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils/format";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { FinancialIndependenceSimulator } from "@/components/patrimonio/FinancialIndependenceSimulator";
 
 export default function PatrimonioPage() {
   const { data, loading } = usePatrimonio();
@@ -25,7 +26,7 @@ export default function PatrimonioPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#F1F0FF]">Patrimônio</h1>
         <p className="mt-1 text-sm text-[#A09DC0]">
-          Evolução dos seus investimentos e saldo
+          Evolução dos seus investimentos, saldo e simulador de independência financeira
         </p>
       </div>
 
@@ -112,6 +113,11 @@ export default function PatrimonioPage() {
           </div>
         )}
       </div>
+
+      <FinancialIndependenceSimulator
+        currentInvestments={data.currentInvestments}
+        currentWealth={data.currentWealth}
+      />
 
       <div className="mb-6">
         <div className="mb-4 flex items-center justify-between">
