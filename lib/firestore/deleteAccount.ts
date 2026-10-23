@@ -74,16 +74,18 @@ export async function deleteAllUserData(uid: string, familyId: string, password:
       : [];
 
     if (familySnapshot.exists() && memberIds.length === 0) {
-      const [entriesAll, categoriesAll, goalsAll] = await Promise.all([
+      const [entriesAll, categoriesAll, goalsAll, accountsAll] = await Promise.all([
         getDocs(collection(db, "families", familyId, "entries")),
         getDocs(collection(db, "families", familyId, "categories")),
         getDocs(collection(db, "families", familyId, "goals")),
+        getDocs(collection(db, "families", familyId, "accounts")),
       ]);
 
       const cleanupBatch = writeBatch(db);
       entriesAll.docs.forEach((entryDoc) => cleanupBatch.delete(entryDoc.ref));
       categoriesAll.docs.forEach((categoryDoc) => cleanupBatch.delete(categoryDoc.ref));
       goalsAll.docs.forEach((goalDoc) => cleanupBatch.delete(goalDoc.ref));
+      accountsAll.docs.forEach((accDoc) => cleanupBatch.delete(accDoc.ref));
       await cleanupBatch.commit();
 
       await deleteDoc(familyRef);

@@ -84,6 +84,10 @@ export function useEntries(filters: EntryFilters): UseEntriesResult {
 
   const invalidateEntries = () => {
     queryClient.invalidateQueries({ queryKey: ["entries", family?.id] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard", family?.id] });
+    queryClient.invalidateQueries({ queryKey: ["accountBalance", family?.id] });
+    queryClient.invalidateQueries({ queryKey: ["patrimonio", family?.id] });
+    queryClient.invalidateQueries({ queryKey: ["reports", family?.id] });
   };
 
   const createEntryMutation = useMutation({

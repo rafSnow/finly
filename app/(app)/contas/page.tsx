@@ -5,25 +5,22 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useAccounts, useAccountBalance } from "@/hooks/useAccounts";
+import { useToast } from "@/hooks/useToast";
+import { formatCurrency } from "@/lib/utils/format";
 import { Account } from "@/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreditCard, MoreVertical, Pencil, Plus, Trash, Wallet, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
-import Link from "next/link";
-
 function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: (a: Account) => void; onDelete: (a: Account) => void }) {
   const { balance, loading } = useAccountBalance(account.id);
   const [showOptions, setShowOptions] = useState(false);
+
+  const isCredit = account.accountType === "credit";
+  const displayAmount = isCredit ? Math.max(0, -balance) : balance;
 
   return (
     <div className="relative flex flex-col justify-between rounded-2xl border border-white/5 bg-[#111118] transition-colors hover:bg-white/[0.02]">
@@ -36,11 +33,13 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
             <div>
               <h3 className="font-medium text-[#F1F0FF]">{account.name}</h3>
               {account.accountType === "credit" && (
-                <p className="text-xs text-[#6B6890]">Vence dia {account.dueDay}</p>
+                <p className="text-xs text-[#6B6890]">
+                  {account.closingDay ? `Fecha dia ${account.closingDay} • ` : ""}Vence dia {account.dueDay}
+                </p>
               )}
             </div>
           </div>
-          
+
           <div className="relative">
             <button
               onClick={(e) => {
@@ -51,7 +50,7 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
             >
               <MoreVertical size={16} />
             </button>
-            
+
             {showOptions && (
               <>
                 <div
@@ -91,9 +90,15 @@ function AccountCard({ account, onEdit, onDelete }: { account: Account; onEdit: 
         </div>
 
         <div className="mt-6">
-          <p className="text-sm font-medium text-[#6B6890]">{account.accountType === "credit" ? "Fatura atual (aprox.)" : account.accountType === "investment" ? "Patrimônio" : "Saldo atual"}</p>
-          <p className={`mt-1 text-2xl font-bold ${account.accountType === "credit" || balance >= 0 ? "text-[#F1F0FF]" : "text-red-400"}`}>
-            {loading ? "..." : formatCurrency(Math.abs(balance))}
+          <p className="text-sm font-medium text-[#6B6890]">
+            {account.accountType === "credit"
+              ? "Fatura em aberto"
+              : account.accountType === "investment"
+              ? "Patrimônio"
+              : "Saldo atual"}
+          </p>
+          <p className={`mt-1 text-2xl font-bold ${isCredit || displayAmount >= 0 ? "text-[#F1F0FF]" : "text-red-400"}`}>
+            {loading ? "..." : formatCurrency(displayAmount)}
           </p>
         </div>
       </Link>
@@ -123,7 +128,8 @@ type AccountFormValues = z.infer<typeof accountBaseSchema>;
 
 export default function ContasPage() {
   const { accounts, loading, createAccount, updateAccount, deleteAccount } = useAccounts();
-  
+  const { showToast } = useToast();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
@@ -146,11 +152,11 @@ export default function ContasPage() {
   const handleOpenModal = (account?: Account) => {
     if (account) {
       setEditingAccount(account);
-      reset({ 
+      reset({
         name: account.name,
         accountType: account.accountType || "checking",
         closingDay: account.closingDay,
-        dueDay: account.dueDay
+        dueDay: account.dueDay,
       });
     } else {
       setEditingAccount(null);
@@ -168,13 +174,14 @@ export default function ContasPage() {
   const onSubmit = async (values: AccountFormValues) => {
     try {
       if (editingAccount) {
-        await updateAccount({ 
-          id: editingAccount.id, 
+        await updateAccount({
+          id: editingAccount.id,
           name: values.name,
           accountType: values.accountType,
           closingDay: values.closingDay ?? undefined,
           dueDay: values.dueDay ?? undefined,
         });
+        showToast("Conta atualizada com sucesso!", "success");
       } else {
         await createAccount({
           name: values.name,
@@ -182,10 +189,12 @@ export default function ContasPage() {
           closingDay: values.closingDay ?? undefined,
           dueDay: values.dueDay ?? undefined,
         });
+        showToast("Conta criada com sucesso!", "success");
       }
       handleCloseModal();
     } catch (error) {
       console.error("Erro ao salvar conta", error);
+      showToast("Não foi possível salvar a conta.", "error");
     }
   };
 
@@ -200,9 +209,18 @@ export default function ContasPage() {
     if (accountToDelete) {
       setIsDeleting(true);
       try {
-        await deleteAccount(accountToDelete.id);
+        const result = await deleteAccount(accountToDelete.id);
+        if (!result.success && result.reason === "has_entries") {
+          showToast(
+            "Esta conta possui lançamentos vinculados e não pode ser excluída.",
+            "error"
+          );
+          return;
+        }
+        showToast("Conta excluída com sucesso!", "success");
       } catch (error) {
         console.error("Erro ao excluir conta", error);
+        showToast("Não foi possível excluir a conta.", "error");
       } finally {
         setIsDeleting(false);
         setIsDeleteConfirmOpen(false);

@@ -1,7 +1,9 @@
+"use client";
+
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Goal } from "@/types";
 import { formatCurrency } from "@/lib/utils/format";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type GoalProgress = {
   goal: Goal;
@@ -15,6 +17,8 @@ type GoalProgressListProps = {
 };
 
 export function GoalProgressList({ items }: GoalProgressListProps) {
+  const router = useRouter();
+
   return (
     <div className="mb-5 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
       <h3 className="mb-3 text-sm font-semibold text-[#F1F0FF]">Progresso das metas</h3>
@@ -24,7 +28,7 @@ export function GoalProgressList({ items }: GoalProgressListProps) {
           description="Crie metas para controlar seus gastos em diferentes categorias"
           action={{
             label: "Criar meta",
-            onClick: () => { window.location.href = "/metas" }
+            onClick: () => router.push("/metas"),
           }}
         />
       ) : (

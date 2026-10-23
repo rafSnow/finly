@@ -7,55 +7,22 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { AccountsOverview } from "@/components/dashboard/AccountsOverview";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useCategories } from "@/hooks/useCategories";
 import { useDashboard } from "@/hooks/useDashboard";
 import { usePeriod } from "@/hooks/usePeriod";
 import { useGoals } from "@/hooks/useGoals";
-import { getCategories } from "@/lib/firestore/categories";
-import { Category, PeriodFilter } from "@/types";
-import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useMemo } from "react";
 import Link from "next/link";
 import { FileBarChart } from "lucide-react";
 import { AiInsights } from "@/components/dashboard/AiInsights";
 
 export default function Dashboard() {
-  const { family } = useAuth();
+  const { period, setPeriod } = usePeriod();
 
-  const { period, setPeriod, mounted } = usePeriod();
-
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-
+  const { categoryNameMap, loading: categoriesLoading } = useCategories();
   const { summary, categoryBreakdown, partnerSummaries, loading, error } =
     useDashboard(period);
   const { goals, loading: goalsLoading } = useGoals();
-
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!family?.id) {
-        setCategories([]);
-        setCategoriesLoading(false);
-        return;
-      }
-
-      setCategoriesLoading(true);
-      try {
-        const list = await getCategories(family.id);
-        setCategories(list);
-      } catch {
-        setCategories([]);
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    loadCategories();
-  }, [family?.id]);
-
-  const categoryNameMap = useMemo(
-    () => new Map(categories.map((category) => [category.id, category.name])),
-    [categories],
-  );
 
   const goalProgress = useMemo(
     () =>
@@ -81,7 +48,7 @@ export default function Dashboard() {
     <div className="space-y-4 pb-24">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[#F1F0FF]">Dashboard</h2>
-        <Link 
+        <Link
           href="/relatorios"
           className="flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 text-sm font-medium text-[#F1F0FF] transition-colors hover:bg-white/10"
         >

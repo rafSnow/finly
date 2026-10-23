@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useCategories } from "@/hooks/useCategories";
 import { useEntries } from "@/hooks/useEntries";
 import { useGoals } from "@/hooks/useGoals";
 import { useDashboard } from "@/hooks/useDashboard";
-import { getCategories } from "@/lib/firestore/categories";
-import { Category } from "@/types";
 
 export type AlertType = "warning" | "danger" | "info";
 
@@ -24,21 +23,14 @@ export function useAlerts() {
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    if (family?.id) {
-      getCategories(family.id).then(setCategories).catch(console.error);
-    }
-  }, [family?.id]);
-
+  const { categories, categoryNameMap, loading: loadingCategories } = useCategories();
   const { entries, loading: loadingEntries } = useEntries({ month: currentMonth, year: currentYear });
   const { goals, loading: loadingGoals } = useGoals();
   const { categoryBreakdown, loading: loadingDashboard } = useDashboard({ month: currentMonth, year: currentYear });
 
   const alerts = useMemo(() => {
     if (!family || categories.length === 0) return [];
-    
+
     const newAlerts: Alert[] = [];
 
     // 1. Verificar Despesas Próximas (Até 3 dias)
@@ -52,7 +44,6 @@ export function useAlerts() {
     const upcomingExpenses = entries.filter((entry) => {
       if (entry.type !== "expense") return false;
       const entryDate = new Date(entry.date);
-      // Conta as que estão vencendo de hoje até daqui a 3 dias
       return entryDate >= today && entryDate <= threeDaysFromNow;
     });
 
@@ -60,7 +51,7 @@ export function useAlerts() {
       const entryDate = new Date(expense.date);
       const diffTime = entryDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       let dayText = "";
       if (diffDays === 0) dayText = "hoje";
       else if (diffDays === 1) dayText = "amanhã";
@@ -79,7 +70,7 @@ export function useAlerts() {
     goals.forEach((goal) => {
       const categoryData = categoryBreakdown.find((cb) => cb.categoryId === goal.categoryId);
       const spent = categoryData?.total || 0;
-      const categoryName = categories.find((c) => c.id === goal.categoryId)?.name || "Categoria";
+      const categoryName = categoryNameMap.get(goal.categoryId) || "Categoria";
 
       if (goal.limit > 0) {
         const percentage = (spent / goal.limit) * 100;
@@ -102,10 +93,10 @@ export function useAlerts() {
     });
 
     return newAlerts;
-  }, [family, entries, goals, categoryBreakdown, categories]);
+  }, [family, entries, goals, categoryBreakdown, categories.length, categoryNameMap]);
 
   return {
     alerts,
-    loading: loadingEntries || loadingGoals || loadingDashboard,
+    loading: loadingEntries || loadingGoals || loadingDashboard || loadingCategories,
   };
 }

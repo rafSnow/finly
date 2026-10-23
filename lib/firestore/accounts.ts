@@ -6,6 +6,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
@@ -97,9 +98,20 @@ export async function updateAccount(
 export async function deleteAccount(
   familyId: string,
   accountId: string
-): Promise<void> {
+): Promise<{ success: boolean; reason?: "has_entries" }> {
   try {
+    const entriesRef = collection(db, "families", familyId, "entries");
+    const [sourceSnap, destSnap] = await Promise.all([
+      getDocs(query(entriesRef, where("accountId", "==", accountId), limit(1))),
+      getDocs(query(entriesRef, where("destinationAccountId", "==", accountId), limit(1))),
+    ]);
+
+    if (!sourceSnap.empty || !destSnap.empty) {
+      return { success: false, reason: "has_entries" };
+    }
+
     await deleteDoc(doc(db, "families", familyId, "accounts", accountId));
+    return { success: true };
   } catch (error) {
     console.error("Erro ao excluir conta:", error);
     throw error;
@@ -145,7 +157,6 @@ export async function getAccountBalance(
     return totalIn - totalOut;
   } catch (error) {
     console.error("Erro ao buscar saldo da conta:", error);
-    return 0; // fallback seguro para não quebrar a UI se as permissões falharem por falta de index
+    return 0;
   }
 }
-

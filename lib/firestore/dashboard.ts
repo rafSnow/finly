@@ -93,180 +93,165 @@ async function getFamilyMemberProfiles(
   familyId: string,
 ): Promise<Array<{ uid: string; name: string }>> {
   try {
-    console.log("📖 [dashboard] Buscando membros da família:", familyId);
     const familySnapshot = await getDoc(doc(db, "families", familyId));
-    console.log("✅ [dashboard] Family snapshot recebido", { familyId, exists: familySnapshot.exists() });
-    
     if (!familySnapshot.exists()) {
-      console.log("⚠️ [dashboard] Family não existe", familyId);
       return [];
     }
 
     const familyData = familySnapshot.data() as { memberIds?: string[] };
     const memberIds = familyData.memberIds ?? [];
-    console.log("📊 [dashboard] IDs de membros encontrados:", { familyId, memberCount: memberIds.length, memberIds });
-    
     if (memberIds.length === 0) {
       return [];
     }
 
-    console.log("📖 [dashboard] Buscando perfis dos membros...");
     const userDocs = await Promise.all(
-      memberIds.map((uid) => {
-        console.log("  📖 Buscando usuário:", uid);
-        return getDoc(doc(db, "users", uid));
-      }),
+      memberIds.map((uid) => getDoc(doc(db, "users", uid))),
     );
-    console.log("✅ [dashboard] Perfis dos membros recebidos");
 
     return userDocs.map((userDoc, index) => {
       const fallbackName = `Usuário ${index + 1}`;
       if (!userDoc.exists()) {
-        console.log(`  ⚠️ Usuário ${memberIds[index]} não existe`);
         return { uid: memberIds[index], name: fallbackName };
       }
       const data = userDoc.data() as { name?: string };
-      const name = data.name ?? fallbackName;
-      console.log(`  ✅ Usuário ${memberIds[index]}: ${name}`);
       return {
         uid: memberIds[index],
-        name
+        name: data.name ?? fallbackName,
       };
     });
   } catch (error) {
-    console.error("❌ [dashboard] Erro ao buscar perfis dos membros:", {
-      error,
-      familyId,
-      message: error instanceof Error ? error.message : "Unknown"
-    });
+    console.error("Erro ao buscar perfis dos membros:", error);
     throw error;
   }
+}
+
+function computeSummaryFromEntries(entries: Entry[]): DashboardSummary {
+  const totalIncome = entries
+    .filter((entry) => entry.type === "income" && !entry.isTransfer)
+    .reduce((sum, entry) => sum + entry.value, 0);
+
+  const totalExpense = entries
+    .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+    .reduce((sum, entry) => sum + entry.value, 0);
+
+  return {
+    totalIncome,
+    totalExpense,
+    balance: totalIncome - totalExpense,
+  };
+}
+
+function computeCategoryBreakdownFromEntries(
+  entries: Entry[],
+  categoriesMap: Map<string, Category>,
+): CategoryBreakdown[] {
+  const expenseEntries = entries.filter(
+    (entry) => entry.type === "expense" && !entry.isTransfer,
+  );
+  const totalExpense = expenseEntries.reduce((sum, entry) => sum + entry.value, 0);
+
+  if (totalExpense <= 0) {
+    return [];
+  }
+
+  const grouped = expenseEntries.reduce<Map<string, number>>((acc, entry) => {
+    const current = acc.get(entry.categoryId) ?? 0;
+    acc.set(entry.categoryId, current + entry.value);
+    return acc;
+  }, new Map());
+
+  return Array.from(grouped.entries())
+    .map(([categoryId, total]) => {
+      const category = categoriesMap.get(categoryId);
+      return {
+        categoryId,
+        categoryName: category?.name ?? "Sem categoria",
+        total,
+        percentage: (total / totalExpense) * 100,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+function computePartnerSummariesFromEntries(
+  entries: Entry[],
+  memberProfiles: Array<{ uid: string; name: string }>,
+): PartnerSummary[] {
+  if (memberProfiles.length === 0) {
+    return [];
+  }
+
+  const totalExpense = entries
+    .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+    .reduce((sum, entry) => sum + entry.value, 0);
+
+  return memberProfiles.map((member) => {
+    const memberEntries = entries.filter((entry) => entry.ownerId === member.uid);
+    const totalIncome = memberEntries
+      .filter((entry) => entry.type === "income" && !entry.isTransfer)
+      .reduce((sum, entry) => sum + entry.value, 0);
+    const memberExpense = memberEntries
+      .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+      .reduce((sum, entry) => sum + entry.value, 0);
+
+    return {
+      uid: member.uid,
+      name: member.name,
+      totalIncome,
+      totalExpense: memberExpense,
+      expenseContribution:
+        totalExpense > 0 ? (memberExpense / totalExpense) * 100 : 0,
+    };
+  });
+}
+
+export async function getDashboardData(
+  familyId: string,
+  filters: PeriodFilter,
+): Promise<{
+  summary: DashboardSummary;
+  categoryBreakdown: CategoryBreakdown[];
+  partnerSummaries: PartnerSummary[];
+}> {
+  const [entries, categoriesMap, memberProfiles] = await Promise.all([
+    getPeriodEntries(familyId, filters),
+    getCategoriesMap(familyId),
+    getFamilyMemberProfiles(familyId),
+  ]);
+
+  return {
+    summary: computeSummaryFromEntries(entries),
+    categoryBreakdown: computeCategoryBreakdownFromEntries(entries, categoriesMap),
+    partnerSummaries: computePartnerSummariesFromEntries(entries, memberProfiles),
+  };
 }
 
 export async function getSummary(
   familyId: string,
   filters: PeriodFilter,
 ): Promise<DashboardSummary> {
-  try {
-    const entries = await getPeriodEntries(familyId, filters);
-
-    const totalIncome = entries
-      .filter((entry) => entry.type === "income" && !entry.isTransfer)
-      .reduce((sum, entry) => sum + entry.value, 0);
-
-    const totalExpense = entries
-      .filter((entry) => entry.type === "expense" && !entry.isTransfer)
-      .reduce((sum, entry) => sum + entry.value, 0);
-
-    return {
-      totalIncome,
-      totalExpense,
-      balance: totalIncome - totalExpense,
-    };
-  } catch (error) {
-    console.error("Erro ao buscar resumo do dashboard:", error);
-    throw error;
-  }
+  const entries = await getPeriodEntries(familyId, filters);
+  return computeSummaryFromEntries(entries);
 }
 
 export async function getEntriesByCategory(
   familyId: string,
   filters: PeriodFilter,
 ): Promise<CategoryBreakdown[]> {
-  try {
-    const [entries, categoriesMap] = await Promise.all([
-      getPeriodEntries(familyId, filters),
-      getCategoriesMap(familyId),
-    ]);
-
-    const expenseEntries = entries.filter((entry) => entry.type === "expense" && !entry.isTransfer);
-    const totalExpense = expenseEntries.reduce((sum, entry) => sum + entry.value, 0);
-
-    if (totalExpense <= 0) {
-      return [];
-    }
-
-    const grouped = expenseEntries.reduce<Map<string, number>>((acc, entry) => {
-      const current = acc.get(entry.categoryId) ?? 0;
-      acc.set(entry.categoryId, current + entry.value);
-      return acc;
-    }, new Map());
-
-    return Array.from(grouped.entries())
-      .map(([categoryId, total]) => {
-        const category = categoriesMap.get(categoryId);
-        return {
-          categoryId,
-          categoryName: category?.name ?? "Sem categoria",
-          total,
-          percentage: (total / totalExpense) * 100,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  } catch (error) {
-    console.error("Erro ao buscar despesas por categoria:", error);
-    throw error;
-  }
+  const [entries, categoriesMap] = await Promise.all([
+    getPeriodEntries(familyId, filters),
+    getCategoriesMap(familyId),
+  ]);
+  return computeCategoryBreakdownFromEntries(entries, categoriesMap);
 }
 
 export async function getPartnerSummaries(
   familyId: string,
   filters: PeriodFilter,
 ): Promise<PartnerSummary[]> {
-  try {
-    console.log("📊 [dashboard] Iniciando busca de resumo dos parceiros", { familyId });
-    
-    const [entries, memberProfiles] = await Promise.all([
-      getPeriodEntries(familyId, filters),
-      getFamilyMemberProfiles(familyId),
-    ]);
-
-    console.log("✅ [dashboard] Dados carregados", { 
-      entryCount: entries.length, 
-      memberCount: memberProfiles.length 
-    });
-
-    if (memberProfiles.length === 0) {
-      console.log("⚠️ [dashboard] Nenhum membro encontrado");
-      return [];
-    }
-
-    const totalExpense = entries
-      .filter((entry) => entry.type === "expense" && !entry.isTransfer)
-      .reduce((sum, entry) => sum + entry.value, 0);
-
-    console.log("📊 [dashboard] Despesa total:", totalExpense);
-
-    const summaries = memberProfiles.map((member) => {
-      const memberEntries = entries.filter((entry) => entry.ownerId === member.uid);
-      const totalIncome = memberEntries
-        .filter((entry) => entry.type === "income" && !entry.isTransfer)
-        .reduce((sum, entry) => sum + entry.value, 0);
-      const memberExpense = memberEntries
-        .filter((entry) => entry.type === "expense" && !entry.isTransfer)
-        .reduce((sum, entry) => sum + entry.value, 0);
-
-      const summary = {
-        uid: member.uid,
-        name: member.name,
-        totalIncome,
-        totalExpense: memberExpense,
-        expenseContribution:
-          totalExpense > 0 ? (memberExpense / totalExpense) * 100 : 0,
-      };
-      
-      console.log(`  📊 ${member.name}:`, summary);
-      return summary;
-    });
-    
-    console.log("✅ [dashboard] Resumo dos parceiros concluído");
-    return summaries;
-  } catch (error) {
-    console.error("❌ [dashboard] Erro ao buscar resumo individual dos parceiros:", {
-      error,
-      familyId,
-      message: error instanceof Error ? error.message : "Unknown"
-    });
-    throw error;
-  }
+  const [entries, memberProfiles] = await Promise.all([
+    getPeriodEntries(familyId, filters),
+    getFamilyMemberProfiles(familyId),
+  ]);
+  return computePartnerSummariesFromEntries(entries, memberProfiles);
 }

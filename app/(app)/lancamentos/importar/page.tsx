@@ -3,17 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useFamily } from "@/hooks/useFamily";
-import { getCategories } from "@/lib/firestore/categories";
-import { Category } from "@/types";
+import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useEntries } from "@/hooks/useEntries";
 import { parseCSV, parseOFX, guessCategory, DraftEntry } from "@/lib/utils/importParser";
 import { getEntriesByDateRange } from "@/lib/firestore/entries";
 import { categorizeTransactionsWithAI } from "@/lib/utils/aiCategorizer";
 import { Modal } from "@/components/ui/Modal";
-import { Sparkles } from "lucide-react";
+import { Sparkles, UploadCloud, CheckCircle, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
-import { UploadCloud, CheckCircle, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -22,16 +20,9 @@ import { useToast } from "@/hooks/useToast";
 export default function ImportarExtratoPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const { family } = useFamily();
-  const [categories, setCategories] = useState<Category[]>([]);
-  
-  useEffect(() => {
-    if (family?.id) {
-      getCategories(family.id).then(setCategories).catch(console.error);
-    }
-  }, [family?.id]);
 
+  const { family } = useFamily();
+  const { categories } = useCategories();
   const { accounts } = useAccounts();
   const { addBatch } = useEntries({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
 
@@ -56,19 +47,19 @@ export default function ImportarExtratoPage() {
       setShowApiKeyModal(true);
       return;
     }
-    
+
     if (keyToUse && keyToUse !== process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
       localStorage.setItem("gemini_api_key", keyToUse);
     }
 
     setAiLoading(true);
     try {
-      const unmapped = drafts.filter(d => !d.categoryId).map(d => ({
+      const unmapped = drafts.filter((d) => !d.categoryId).map((d) => ({
         id: d.id,
         description: d.description,
-        type: d.type
+        type: d.type,
       }));
-      
+
       if (unmapped.length === 0) {
         showToast("Todas as transações já possuem categoria ou não há nada para categorizar!", "info");
         setAiLoading(false);
@@ -76,14 +67,16 @@ export default function ImportarExtratoPage() {
       }
 
       const mapping = await categorizeTransactionsWithAI(unmapped, categories, apiKey);
-      
-      setDrafts(prev => prev.map(d => {
-        if (mapping[d.id]) {
-          return { ...d, categoryId: mapping[d.id] };
-        }
-        return d;
-      }));
-      
+
+      setDrafts((prev) =>
+        prev.map((d) => {
+          if (mapping[d.id]) {
+            return { ...d, categoryId: mapping[d.id] };
+          }
+          return d;
+        })
+      );
+
       setShowApiKeyModal(false);
       showToast("Categorização via IA concluída!", "success");
     } catch (err) {
@@ -107,7 +100,7 @@ export default function ImportarExtratoPage() {
     try {
       const text = await file.text();
       let parsedEntries: DraftEntry[] = [];
-      
+
       if (file.name.toLowerCase().endsWith(".ofx")) {
         parsedEntries = parseOFX(text);
       } else if (file.name.toLowerCase().endsWith(".csv")) {
@@ -118,7 +111,7 @@ export default function ImportarExtratoPage() {
       }
 
       if (parsedEntries.length > 0) {
-        const dates = parsedEntries.map(d => new Date(d.date + "T12:00:00").getTime());
+        const dates = parsedEntries.map((d) => new Date(d.date + "T12:00:00").getTime());
         const minDate = new Date(Math.min(...dates));
         const maxDate = new Date(Math.max(...dates));
 
@@ -126,13 +119,15 @@ export default function ImportarExtratoPage() {
         maxDate.setHours(23, 59, 59, 999);
 
         const existingEntries = await getEntriesByDateRange(family.id, minDate, maxDate, accountId);
-        
-        parsedEntries = parsedEntries.filter(draft => {
-          const isDuplicate = existingEntries.some(existing => {
+
+        parsedEntries = parsedEntries.filter((draft) => {
+          const isDuplicate = existingEntries.some((existing) => {
             const existingDate = existing.date.toISOString().split("T")[0];
-            return existingDate === draft.date &&
-                   existing.description === draft.description &&
-                   existing.value === draft.value;
+            return (
+              existingDate === draft.date &&
+              existing.description === draft.description &&
+              existing.value === draft.value
+            );
           });
           return !isDuplicate;
         });
@@ -145,9 +140,9 @@ export default function ImportarExtratoPage() {
         return;
       }
 
-      const entriesWithCategories = parsedEntries.map(e => ({
+      const entriesWithCategories = parsedEntries.map((e) => ({
         ...e,
-        categoryId: guessCategory(e.description, categories)
+        categoryId: guessCategory(e.description, categories),
       }));
 
       setDrafts(entriesWithCategories);
@@ -161,19 +156,19 @@ export default function ImportarExtratoPage() {
   };
 
   const toggleSelect = (id: string) => {
-    setDrafts(prev => prev.map(d => d.id === id ? { ...d, selected: !d.selected } : d));
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, selected: !d.selected } : d)));
   };
 
   const updateCategory = (id: string, catId: string) => {
-    setDrafts(prev => prev.map(d => d.id === id ? { ...d, categoryId: catId } : d));
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, categoryId: catId } : d)));
   };
 
   const updateDescription = (id: string, desc: string) => {
-    setDrafts(prev => prev.map(d => d.id === id ? { ...d, description: desc } : d));
+    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, description: desc } : d)));
   };
 
   const deleteDraft = (id: string) => {
-    setDrafts(prev => prev.filter(d => d.id !== id));
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
   };
 
   const handleSave = async () => {
@@ -182,21 +177,21 @@ export default function ImportarExtratoPage() {
       return;
     }
 
-    const toSave = drafts.filter(d => d.selected);
+    const toSave = drafts.filter((d) => d.selected);
     if (toSave.length === 0) return;
 
     setLoading(true);
     try {
-      const payload = toSave.map(d => ({
+      const payload = toSave.map((d) => ({
         type: d.type,
         value: d.value,
         description: d.description,
         date: new Date(d.date + "T12:00:00"),
         categoryId: d.categoryId || "",
         accountId: accountId,
-        isCredit: accounts.find(a => a.id === accountId)?.accountType === "credit",
+        isCredit: accounts.find((a) => a.id === accountId)?.accountType === "credit",
         isRecurring: false,
-        isInstallment: false
+        isInstallment: false,
       }));
 
       await addBatch(payload);
@@ -209,12 +204,12 @@ export default function ImportarExtratoPage() {
     }
   };
 
-  const selectedCount = drafts.filter(d => d.selected).length;
+  const selectedCount = drafts.filter((d) => d.selected).length;
 
   return (
     <div className="space-y-6 pb-24">
       <div className="flex items-center gap-4">
-        <Link 
+        <Link
           href="/lancamentos"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#A09DC0] transition-colors hover:bg-white/10 hover:text-white"
         >
@@ -236,15 +231,19 @@ export default function ImportarExtratoPage() {
               className="w-full"
               options={[
                 { value: "", label: "Selecione uma conta..." },
-                ...accounts.map(acc => ({ value: acc.id, label: acc.name }))
+                ...accounts.map((acc) => ({ value: acc.id, label: acc.name })),
               ]}
             />
             <p className="text-xs text-[#6B6890]">Todas as transações importadas serão atribuídas a esta conta.</p>
           </div>
 
-          <div 
-            onClick={() => accountId ? fileInputRef.current?.click() : showToast('Selecione uma conta primeiro', 'info')}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-colors ${accountId ? 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10' : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'}`}
+          <div
+            onClick={() => (accountId ? fileInputRef.current?.click() : showToast("Selecione uma conta primeiro", "info"))}
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 transition-colors ${
+              accountId
+                ? "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10"
+                : "border-white/10 bg-white/5 opacity-50 cursor-not-allowed"
+            }`}
           >
             <UploadCloud size={48} className="mb-4 text-[#8B5CF6]" />
             <p className="mb-1 text-center font-medium text-[#F1F0FF]">
@@ -253,10 +252,10 @@ export default function ImportarExtratoPage() {
             <p className="text-center text-sm text-[#A09DC0]">
               Formatos suportados: .ofx, .csv
             </p>
-            <input 
-              type="file" 
-              accept=".ofx,.csv" 
-              className="hidden" 
+            <input
+              type="file"
+              accept=".ofx,.csv"
+              className="hidden"
               ref={fileInputRef}
               onChange={handleFileChange}
             />
@@ -312,11 +311,11 @@ export default function ImportarExtratoPage() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.07]">
                   {drafts.map((draft) => (
-                    <tr key={draft.id} className={`transition-colors hover:bg-white/[0.02] ${!draft.selected ? 'opacity-50' : ''}`}>
+                    <tr key={draft.id} className={`transition-colors hover:bg-white/[0.02] ${!draft.selected ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3">
-                        <input 
-                          type="checkbox" 
-                          checked={draft.selected} 
+                        <input
+                          type="checkbox"
+                          checked={draft.selected}
                           onChange={() => toggleSelect(draft.id)}
                           className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-[#8B5CF6] focus:ring-[#8B5CF6] focus:ring-offset-gray-900"
                         />
@@ -325,8 +324,8 @@ export default function ImportarExtratoPage() {
                         {draft.date.split("-").reverse().join("/")}
                       </td>
                       <td className="min-w-[200px] px-4 py-3">
-                        <Input 
-                          value={draft.description} 
+                        <Input
+                          value={draft.description}
                           onChange={(e) => updateDescription(draft.id, e.target.value)}
                           className="h-8 bg-transparent text-sm border-white/10"
                         />
@@ -339,16 +338,16 @@ export default function ImportarExtratoPage() {
                           options={[
                             { value: "", label: "Sem categoria" },
                             ...categories
-                              .filter(c => c.type === draft.type)
-                              .map(c => ({ value: c.id, label: c.name }))
+                              .filter((c) => c.type === "both" || c.type === draft.type)
+                              .map((c) => ({ value: c.id, label: c.name })),
                           ]}
                         />
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium ${draft.type === "income" ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+                      <td className={`px-4 py-3 text-right font-medium ${draft.type === "income" ? "text-[#10B981]" : "text-[#EF4444]"}`}>
                         {formatCurrency(draft.value)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button 
+                        <button
                           onClick={() => deleteDraft(draft.id)}
                           className="text-[#6B6890] hover:text-red-400"
                         >
@@ -391,7 +390,6 @@ export default function ImportarExtratoPage() {
           </div>
         </div>
       </Modal>
-
     </div>
   );
 }

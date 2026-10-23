@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { Timestamp, collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase";
 
 export interface MonthlyReport {
@@ -9,17 +9,17 @@ export interface MonthlyReport {
 }
 
 export async function getYearlyReport(familyId: string, year: number): Promise<MonthlyReport[]> {
-  const startOfYear = new Date(year, 0, 1);
+  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
   const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
 
   const q = query(
     collection(db, "families", familyId, "entries"),
-    where("date", ">=", startOfYear),
-    where("date", "<=", endOfYear)
+    where("date", ">=", Timestamp.fromDate(startOfYear)),
+    where("date", "<=", Timestamp.fromDate(endOfYear))
   );
 
   const snapshot = await getDocs(q);
-  
+
   const monthlyData: MonthlyReport[] = Array.from({ length: 12 }, (_, i) => ({
     month: i,
     income: 0,
@@ -27,20 +27,20 @@ export async function getYearlyReport(familyId: string, year: number): Promise<M
     balance: 0,
   }));
 
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    const entryDate = data.date.toDate();
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data.isTransfer || data.type === "transfer") return;
+
+    const entryDate = data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date);
     const monthIndex = entryDate.getMonth();
-    
-    // Ignorar gastos no crédito puro, pois eles viram "Fatura" e debitam o saldo na conta corrente.
-    if (data.isCredit) return;
+    const val = Number(data.value ?? 0);
 
     if (data.type === "income") {
-      monthlyData[monthIndex].income += data.value;
-      monthlyData[monthIndex].balance += data.value;
+      monthlyData[monthIndex].income += val;
+      monthlyData[monthIndex].balance += val;
     } else if (data.type === "expense") {
-      monthlyData[monthIndex].expense += data.value;
-      monthlyData[monthIndex].balance -= data.value;
+      monthlyData[monthIndex].expense += val;
+      monthlyData[monthIndex].balance -= val;
     }
   });
 

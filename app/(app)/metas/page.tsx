@@ -3,21 +3,18 @@
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
-import { useAuth } from "@/hooks/useAuth";
+import { useCategories } from "@/hooks/useCategories";
 import { useGoals } from "@/hooks/useGoals";
 import { useToast } from "@/hooks/useToast";
-import { getCategories } from "@/lib/firestore/categories";
 import { formatCurrency } from "@/lib/utils/format";
-import { Category, Goal } from "@/types";
-import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Goal } from "@/types";
+import { useMemo, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Controller } from "react-hook-form";
 
 const goalSchema = z.object({
   categoryId: z.string().min(1, "Selecione uma categoria."),
@@ -32,12 +29,14 @@ function parseCurrencyToNumber(value: string): number {
 }
 
 export default function Metas() {
-  const { family } = useAuth();
   const { showToast } = useToast();
   const { goals, loading, error, createGoal, updateGoal, deleteGoal } = useGoals();
+  const { categories: allCategories, categoryNameMap, loading: categoriesLoading } = useCategories();
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const categories = useMemo(
+    () => allCategories.filter((category) => category.type !== "income"),
+    [allCategories],
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -54,33 +53,6 @@ export default function Metas() {
     resolver: zodResolver(goalSchema),
     defaultValues: { categoryId: "", limitInput: "" },
   });
-
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!family?.id) {
-        setCategories([]);
-        setCategoriesLoading(false);
-        return;
-      }
-
-      setCategoriesLoading(true);
-      try {
-        const list = await getCategories(family.id);
-        setCategories(list.filter((category) => category.type !== "income"));
-      } catch {
-        setCategories([]);
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    loadCategories();
-  }, [family?.id]);
-
-  const categoryNameMap = useMemo(
-    () => new Map(categories.map((category) => [category.id, category.name])),
-    [categories],
-  );
 
   const openCreateModal = () => {
     setEditingGoal(null);
@@ -188,7 +160,7 @@ export default function Metas() {
             >
               <div className="mb-2 flex items-center justify-between">
                 <p className="font-semibold text-[#F1F0FF]">
-                {categoryNameMap.get(goal.categoryId) ?? "Categoria"}
+                  {categoryNameMap.get(goal.categoryId) ?? "Categoria"}
                 </p>
                 <span className="rounded-full bg-[#7C3AED]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#8B5CF6]">
                   Mensal

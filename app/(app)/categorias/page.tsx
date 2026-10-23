@@ -8,18 +8,11 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
-import { useFamily } from "@/hooks/useFamily";
+import { useCategories } from "@/hooks/useCategories";
 import { useToast } from "@/hooks/useToast";
-import {
-  createCategory,
-  createDefaultCategories,
-  deleteCategory,
-  getCategories,
-  updateCategory,
-} from "@/lib/firestore/categories";
 import { Category } from "@/types";
 import { getCategoryIcon } from "@/lib/utils/categoryIcons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,13 +32,17 @@ const TYPE_OPTIONS = [
 ];
 
 export default function Categorias() {
-  const { family, loading: familyLoading } = useFamily();
   const { showToast } = useToast();
+  const {
+    categories,
+    loading,
+    error: queryError,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+  } = useCategories({ ensureDefaults: true });
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -67,38 +64,6 @@ export default function Categorias() {
     [activeTab, categories],
   );
 
-  const loadCategories = useCallback(async () => {
-    if (!family) {
-      setCategories([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      let list = await getCategories(family.id);
-      if (list.length === 0) {
-        await createDefaultCategories(family.id);
-        list = await getCategories(family.id);
-      }
-      setCategories(list);
-    } catch (loadError) {
-      console.error("Erro ao carregar categorias:", loadError);
-      setError("Não foi possível carregar as categorias.");
-    } finally {
-      setLoading(false);
-    }
-  }, [family]);
-
-  useEffect(() => {
-    if (familyLoading) {
-      return;
-    }
-
-    loadCategories();
-  }, [familyLoading, loadCategories]);
-
   const openCreateModal = () => {
     setEditingCategory(null);
     reset({ name: "", type: "expense" });
@@ -112,17 +77,16 @@ export default function Categorias() {
   };
 
   const onFormSubmit = async (values: CategoryFormValues) => {
-    if (!family) return;
     setError("");
 
     try {
       if (editingCategory) {
-        await updateCategory(family.id, editingCategory.id, {
+        await updateCategory(editingCategory.id, {
           name: values.name,
           type: values.type,
         });
       } else {
-        await createCategory(family.id, {
+        await createCategory({
           name: values.name,
           type: values.type,
           isDefault: false,
@@ -130,7 +94,6 @@ export default function Categorias() {
       }
       setIsModalOpen(false);
       showToast("Categoria salva com sucesso!", "success");
-      await loadCategories();
     } catch (saveError) {
       console.error("Erro ao salvar categoria:", saveError);
       setError("Não foi possível salvar a categoria.");
@@ -143,14 +106,10 @@ export default function Categorias() {
       return;
     }
 
-    if (!family) {
-      return;
-    }
-
     setError("");
     try {
       setDeleting(true);
-      const result = await deleteCategory(family.id, categoryToDelete.id);
+      const result = await deleteCategory(categoryToDelete.id);
       if (!result.success && result.reason === "has_entries") {
         setError("Esta categoria possui lançamentos e não pode ser excluída");
         showToast("Esta categoria possui lançamentos e não pode ser excluída.", "error");
@@ -159,7 +118,6 @@ export default function Categorias() {
 
       showToast("Categoria excluída com sucesso!", "success");
       setCategoryToDelete(null);
-      await loadCategories();
     } catch (deleteError) {
       console.error("Erro ao excluir categoria:", deleteError);
       setError("Não foi possível excluir a categoria.");
@@ -169,7 +127,7 @@ export default function Categorias() {
     }
   };
 
-  if (loading || familyLoading) {
+  if (loading) {
     return (
       <div className="space-y-3">
         <Skeleton variant="card" height="h-24" />
@@ -187,7 +145,7 @@ export default function Categorias() {
         </Button>
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {(error || queryError) && <p className="text-sm text-red-400">{error || queryError}</p>}
 
       <div className="grid grid-cols-3 rounded-xl bg-[#1A1A26] p-1">
         <button
@@ -248,20 +206,20 @@ export default function Categorias() {
                   className="flex items-center justify-between gap-3 border-b border-white/[0.05] py-3.5 last:border-0"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div 
+                    <div
                       className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#1A1A26]"
                     >
                       {(() => {
                         const Icon = getCategoryIcon(category.name, category.type === "income");
                         return (
-                          <Icon 
+                          <Icon
                             className={`h-5 w-5 ${
                               category.type === "expense"
                                 ? "text-red-400"
                                 : category.type === "income"
                                   ? "text-emerald-400"
                                   : "text-[#8B5CF6]"
-                            }`} 
+                            }`}
                           />
                         );
                       })()}

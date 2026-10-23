@@ -18,14 +18,18 @@ export function useAccounts() {
     enabled: !authLoading && !!familyId,
   });
 
+  const invalidateAccounts = () => {
+    queryClient.invalidateQueries({ queryKey: ["accounts", familyId] });
+    queryClient.invalidateQueries({ queryKey: ["accountBalance", familyId] });
+    queryClient.invalidateQueries({ queryKey: ["patrimonio", familyId] });
+  };
+
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; accountType?: "checking" | "credit" | "investment"; closingDay?: number; dueDay?: number }) => {
       if (!familyId) throw new Error("Família não encontrada");
       return createAccount(familyId, payload.name, payload.accountType, payload.closingDay, payload.dueDay);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts", familyId] });
-    },
+    onSuccess: invalidateAccounts,
   });
 
   const updateMutation = useMutation({
@@ -33,9 +37,7 @@ export function useAccounts() {
       if (!familyId) throw new Error("Família não encontrada");
       return updateAccount(familyId, payload.id, payload);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts", familyId] });
-    },
+    onSuccess: invalidateAccounts,
   });
 
   const deleteMutation = useMutation({
@@ -43,9 +45,7 @@ export function useAccounts() {
       if (!familyId) throw new Error("Família não encontrada");
       return deleteAccount(familyId, id);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts", familyId] });
-    },
+    onSuccess: invalidateAccounts,
   });
 
   return {

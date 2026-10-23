@@ -32,6 +32,12 @@ function getUpdateDataFromPayload(
   if (payload.data.categoryId !== currentEntry.categoryId) {
     nextData.categoryId = payload.data.categoryId;
   }
+  if (payload.data.accountId !== (currentEntry.accountId ?? "")) {
+    nextData.accountId = payload.data.accountId;
+  }
+  if ((payload.data.destinationAccountId ?? "") !== (currentEntry.destinationAccountId ?? "")) {
+    nextData.destinationAccountId = payload.data.destinationAccountId;
+  }
   if (payload.data.date.getTime() !== currentEntry.date.getTime()) {
     nextData.date = payload.data.date;
   }

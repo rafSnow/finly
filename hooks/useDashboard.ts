@@ -1,15 +1,8 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
-import {
-  getEntriesByCategory,
-  getPartnerSummaries,
-  getSummary,
-} from "@/lib/firestore/dashboard";
-import {
-  DashboardSummary,
-  PeriodFilter,
-} from "@/types";
+import { getDashboardData } from "@/lib/firestore/dashboard";
+import { DashboardSummary, PeriodFilter } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 
 const EMPTY_SUMMARY: DashboardSummary = {
@@ -28,7 +21,7 @@ export function useDashboard(filters: PeriodFilter) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["dashboard", familyId, filters],
+    queryKey: ["dashboard", familyId, filters.month, filters.year],
     queryFn: async () => {
       if (!familyId) {
         return {
@@ -38,17 +31,10 @@ export function useDashboard(filters: PeriodFilter) {
         };
       }
 
-      const [summaryData, categoryData, partnerData] = await Promise.all([
-        getSummary(familyId, filters),
-        getEntriesByCategory(familyId, filters),
-        getPartnerSummaries(familyId, filters),
-      ]);
-
-      return {
-        summary: summaryData,
-        categoryBreakdown: categoryData,
-        partnerSummaries: partnerData,
-      };
+      return getDashboardData(familyId, {
+        month: filters.month,
+        year: filters.year,
+      });
     },
     enabled: !authLoading && !!familyId,
   });

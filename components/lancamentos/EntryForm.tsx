@@ -3,16 +3,14 @@
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { useAuth } from "@/hooks/useAuth";
 import { useAccounts } from "@/hooks/useAccounts";
-import { getCategories } from "@/lib/firestore/categories";
+import { useCategories } from "@/hooks/useCategories";
 import {
-  Category,
   CreateEntryInput,
   Entry,
   RecurrenceInterval,
 } from "@/types";
-import { useEffect, useMemo, useState, useId } from "react";
+import { useEffect, useMemo, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -95,10 +93,8 @@ export function EntryForm({
   submitLabel = "Salvar",
   canConfigureRecurrence = true,
 }: EntryFormProps) {
-  const { family } = useAuth();
   const { accounts, loading: accountsLoading } = useAccounts();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const { categories, loading: categoriesLoading } = useCategories();
 
   const {
     register,
@@ -128,29 +124,11 @@ export function EntryForm({
   });
 
   const type = watch("type");
+  const valueInput = watch("valueInput");
   const categoryId = watch("categoryId");
   const repetitionType = watch("repetitionType");
+  const recurrenceCount = watch("recurrenceCount");
   const description = watch("description") ?? "";
-
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!family?.id) {
-        setCategories([]);
-        setCategoriesLoading(false);
-        return;
-      }
-      setCategoriesLoading(true);
-      try {
-        const list = await getCategories(family.id);
-        setCategories(list);
-      } catch (error) {
-        console.error("Erro ao carregar categorias do formulário:", error);
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-    loadCategories();
-  }, [family?.id]);
 
   useEffect(() => {
     if (!categoryId || categoriesLoading || categories.length === 0 || type === "transfer") return;
@@ -168,15 +146,20 @@ export function EntryForm({
     const selected = categories.find((c) => c.id === categoryId);
     if (selected) return [selected, ...valid];
     return [
-      { id: categoryId, name: "Categoria atual", type: "both", familyId: "", createdAt: new Date(), isDefault: false },
+      { id: categoryId, name: "Categoria atual", type: "both" as const, familyId: "", createdAt: new Date(), isDefault: false },
       ...valid,
     ];
   }, [categories, categoryId, type]);
 
+  const numericValue = parseCurrencyToNumber(valueInput || "");
+  const validInstallmentCount =
+    typeof recurrenceCount === "number" && !Number.isNaN(recurrenceCount) && recurrenceCount >= 2
+      ? recurrenceCount
+      : 2;
+
   const onFormSubmit = async (values: EntryFormValues) => {
     const numValue = parseCurrencyToNumber(values.valueInput);
     if (numValue <= 0) {
-      // Manual error if 0 since zod checks string presence
       return;
     }
 
@@ -240,7 +223,11 @@ export function EntryForm({
         </button>
       </div>
 
-      <label className="mb-1.5 block text-center text-sm font-medium text-[#A09DC0]">Valor</label>
+      <label className="mb-1.5 block text-center text-sm font-medium text-[#A09DC0]">
+        {canConfigureRecurrence && repetitionType === "installment"
+          ? "Valor Total da Compra"
+          : "Valor"}
+      </label>
       <Controller
         name="valueInput"
         control={control}
@@ -348,6 +335,16 @@ export function EntryForm({
               {...register("recurrenceCount", { valueAsNumber: true })}
               error={errors.recurrenceCount?.message}
             />
+            {repetitionType === "installment" && numericValue > 0 ? (
+              <p className="rounded-lg bg-[#7C3AED]/15 px-3 py-2 text-center text-xs font-medium text-[#A09DC0]">
+                Serão criadas{" "}
+                <strong className="text-[#F1F0FF]">{validInstallmentCount} parcelas</strong> de{" "}
+                <strong className="text-[#8B5CF6]">
+                  {formatCurrency(numericValue / validInstallmentCount)}
+                </strong>{" "}
+                (Total: {formatCurrency(numericValue)})
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

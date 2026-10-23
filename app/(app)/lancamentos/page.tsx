@@ -2,19 +2,16 @@
 
 import { EntryList } from "@/components/lancamentos/EntryList";
 import { RecurringScopeModal } from "@/components/lancamentos/RecurringScopeModal";
-import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Modal } from "@/components/ui/Modal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
-import { useAuth } from "@/hooks/useAuth";
+import { useCategories } from "@/hooks/useCategories";
 import { useEntries } from "@/hooks/useEntries";
 import { usePeriod } from "@/hooks/usePeriod";
 import { useToast } from "@/hooks/useToast";
-import { getCategories } from "@/lib/firestore/categories";
 import { formatMonthYear } from "@/lib/utils/format";
-import { Category, Entry, EntryFilters, RecurringScope } from "@/types";
+import { Entry, EntryFilters, RecurringScope } from "@/types";
 import { Plus, FileUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,7 +19,6 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function Lancamentos() {
   const router = useRouter();
-  const { family } = useAuth();
   const { showToast } = useToast();
 
   const { period, setPeriod, mounted } = usePeriod();
@@ -30,8 +26,7 @@ export default function Lancamentos() {
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const { categories, loading: categoriesLoading } = useCategories();
 
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -49,29 +44,6 @@ export default function Lancamentos() {
   );
 
   const { entries, loading, error, deleteEntry } = useEntries(filters);
-
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!family?.id) {
-        setCategories([]);
-        setCategoriesLoading(false);
-        return;
-      }
-
-      setCategoriesLoading(true);
-      try {
-        const list = await getCategories(family.id);
-        setCategories(list);
-      } catch (loadError) {
-        console.error("Erro ao carregar categorias para filtro:", loadError);
-        setCategories([]);
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    loadCategories();
-  }, [family?.id]);
 
   const filteredCategories = useMemo(() => {
     if (typeFilter === "all") {
@@ -113,7 +85,7 @@ export default function Lancamentos() {
 
   const handleDeleteClick = (entry: Entry) => {
     setSelectedEntry(entry);
-    if (entry.isRecurring) {
+    if (entry.isRecurring || entry.isInstallment) {
       setShowRecurringDelete(true);
     } else {
       setShowDeleteConfirm(true);

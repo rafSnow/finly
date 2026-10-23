@@ -87,28 +87,30 @@ function addInterval(base: Date, interval: RecurrenceInterval, n: number): Date 
 
 function sanitizePartialEntry(
   data: Partial<Entry>,
-): Partial<Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">> {
-  const sanitized: Partial<
-    Omit<Entry, "id" | "ownerId" | "familyId" | "createdAt">
-  > = {};
+): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
 
   if (data.type) {
     sanitized.type = data.type;
+    sanitized.isTransfer = data.type === "transfer";
+    if (data.type !== "transfer") {
+      sanitized.destinationAccountId = null;
+    }
   }
   if (typeof data.value === "number") {
     sanitized.value = data.value;
   }
-  if (data.categoryId) {
-    sanitized.categoryId = data.categoryId;
+  if (data.categoryId !== undefined) {
+    sanitized.categoryId = data.categoryId || null;
   }
-  if (data.accountId) {
-    sanitized.accountId = data.accountId;
+  if (data.accountId !== undefined) {
+    sanitized.accountId = data.accountId || null;
   }
-  if (data.destinationAccountId) {
-    sanitized.destinationAccountId = data.destinationAccountId;
+  if (data.destinationAccountId !== undefined) {
+    sanitized.destinationAccountId = data.destinationAccountId || null;
   }
   if (data.date instanceof Date) {
-    sanitized.date = data.date;
+    sanitized.date = Timestamp.fromDate(data.date);
   }
   if (typeof data.description === "string") {
     sanitized.description = data.description;
@@ -271,14 +273,21 @@ export async function createRecurringEntries(
     const batch = writeBatch(db);
     const recurrenceId = crypto.randomUUID();
 
+    const totalCents = Math.round(data.value * 100);
+    const baseInstallmentCents = isInstallment ? Math.floor(totalCents / count) : totalCents;
+    const remainderCents = isInstallment ? totalCents - baseInstallmentCents * count : 0;
+
     for (let i = 0; i < count; i += 1) {
       const nextDate = addInterval(data.date, interval, i);
       const entryRef = doc(collection(db, "families", familyId, "entries"));
+      const entryValue = isInstallment
+        ? (baseInstallmentCents + (i === 0 ? remainderCents : 0)) / 100
+        : data.value;
 
       batch.set(entryRef, {
         familyId,
         type: data.type,
-        value: data.value,
+        value: entryValue,
         categoryId: data.categoryId || null,
         accountId: data.accountId || null,
         destinationAccountId: data.destinationAccountId || null,
@@ -287,7 +296,7 @@ export async function createRecurringEntries(
         ownerId,
         recurrenceId,
         recurrenceIndex: i,
-        isRecurring: !isInstallment, // Se for parcela, não é 'recurring' infinito/assinatura
+        isRecurring: !isInstallment,
         isInstallment,
         installmentCount: isInstallment ? count : null,
         isCredit,
@@ -303,6 +312,16 @@ export async function createRecurringEntries(
   }
 }
 
+async function resolveCreditFlagIfAccountChanged(
+  familyId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  if (typeof payload.accountId === "string" && payload.accountId) {
+    const accSnap = await getDoc(doc(db, "families", familyId, "accounts", payload.accountId));
+    payload.isCredit = accSnap.exists() && accSnap.data().accountType === "credit";
+  }
+}
+
 export async function updateEntry(
   familyId: string,
   entryId: string,
@@ -313,6 +332,8 @@ export async function updateEntry(
     if (Object.keys(payload).length === 0) {
       return;
     }
+
+    await resolveCreditFlagIfAccountChanged(familyId, payload);
 
     await updateDoc(doc(db, "families", familyId, "entries", entryId), payload);
   } catch (error) {
@@ -342,6 +363,8 @@ export async function updateRecurringEntries(
   }
 
   try {
+    await resolveCreditFlagIfAccountChanged(familyId, payload);
+
     const constraints = [where("recurrenceId", "==", entry.recurrenceId)];
     if (scope === "this_and_following") {
       constraints.push(where("recurrenceIndex", ">=", entry.recurrenceIndex ?? 0));
