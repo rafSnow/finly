@@ -43,6 +43,8 @@ function mapEntry(data: Record<string, unknown>): Entry {
     isTransfer: Boolean(data.isTransfer),
     transferId: (data.transferId as string | undefined) ?? undefined,
     destinationAccountId: (data.destinationAccountId as string | undefined) ?? undefined,
+    isPaid: data.isPaid === undefined ? true : Boolean(data.isPaid),
+    isShared: data.isShared === undefined ? true : Boolean(data.isShared),
     createdAt: new Date(),
   };
 }
@@ -125,19 +127,40 @@ async function getFamilyMemberProfiles(
   }
 }
 
-function computeSummaryFromEntries(entries: Entry[]): DashboardSummary {
-  const totalIncome = entries
-    .filter((entry) => entry.type === "income" && !entry.isTransfer)
+export function computeSummaryFromEntries(entries: Entry[]): DashboardSummary {
+  const incomes = entries.filter(
+    (entry) => entry.type === "income" && !entry.isTransfer,
+  );
+  const expenses = entries.filter(
+    (entry) => entry.type === "expense" && !entry.isTransfer,
+  );
+
+  const totalIncome = incomes.reduce((sum, entry) => sum + entry.value, 0);
+  const totalExpense = expenses.reduce((sum, entry) => sum + entry.value, 0);
+
+  const paidIncome = incomes
+    .filter((entry) => entry.isPaid !== false)
+    .reduce((sum, entry) => sum + entry.value, 0);
+  const pendingIncome = incomes
+    .filter((entry) => entry.isPaid === false)
     .reduce((sum, entry) => sum + entry.value, 0);
 
-  const totalExpense = entries
-    .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+  const paidExpense = expenses
+    .filter((entry) => entry.isPaid !== false)
+    .reduce((sum, entry) => sum + entry.value, 0);
+  const pendingExpense = expenses
+    .filter((entry) => entry.isPaid === false)
     .reduce((sum, entry) => sum + entry.value, 0);
 
   return {
     totalIncome,
     totalExpense,
     balance: totalIncome - totalExpense,
+    paidIncome,
+    paidExpense,
+    pendingIncome,
+    pendingExpense,
+    realizedBalance: paidIncome - paidExpense,
   };
 }
 
@@ -173,7 +196,7 @@ function computeCategoryBreakdownFromEntries(
     .sort((a, b) => b.total - a.total);
 }
 
-function computePartnerSummariesFromEntries(
+export function computePartnerSummariesFromEntries(
   entries: Entry[],
   memberProfiles: Array<{ uid: string; name: string }>,
 ): PartnerSummary[] {
@@ -181,8 +204,12 @@ function computePartnerSummariesFromEntries(
     return [];
   }
 
-  const totalExpense = entries
+  const totalCoupleExpense = entries
     .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+    .reduce((sum, entry) => sum + entry.value, 0);
+
+  const totalCoupleIncome = entries
+    .filter((entry) => entry.type === "income" && !entry.isTransfer)
     .reduce((sum, entry) => sum + entry.value, 0);
 
   return memberProfiles.map((member) => {
@@ -190,8 +217,18 @@ function computePartnerSummariesFromEntries(
     const totalIncome = memberEntries
       .filter((entry) => entry.type === "income" && !entry.isTransfer)
       .reduce((sum, entry) => sum + entry.value, 0);
-    const memberExpense = memberEntries
-      .filter((entry) => entry.type === "expense" && !entry.isTransfer)
+
+    const memberExpenses = memberEntries.filter(
+      (entry) => entry.type === "expense" && !entry.isTransfer,
+    );
+    const memberExpense = memberExpenses.reduce((sum, entry) => sum + entry.value, 0);
+
+    const sharedExpensePaid = memberExpenses
+      .filter((entry) => entry.isShared !== false)
+      .reduce((sum, entry) => sum + entry.value, 0);
+
+    const personalExpensePaid = memberExpenses
+      .filter((entry) => entry.isShared === false)
       .reduce((sum, entry) => sum + entry.value, 0);
 
     return {
@@ -200,7 +237,11 @@ function computePartnerSummariesFromEntries(
       totalIncome,
       totalExpense: memberExpense,
       expenseContribution:
-        totalExpense > 0 ? (memberExpense / totalExpense) * 100 : 0,
+        totalCoupleExpense > 0 ? (memberExpense / totalCoupleExpense) * 100 : 0,
+      sharedExpensePaid,
+      personalExpensePaid,
+      incomeContribution:
+        totalCoupleIncome > 0 ? (totalIncome / totalCoupleIncome) * 100 : 0,
     };
   });
 }

@@ -42,10 +42,11 @@ function DetalhesContaContent() {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<Entry | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { showToast } = useToast();
 
-  const { entries, loading: loadingEntries, createEntry, deleteEntry } = useEntries({
+  const { entries, loading: loadingEntries, createEntry, updateEntry, deleteEntry } = useEntries({
     month: period.month,
     year: period.year,
   });
@@ -119,8 +120,6 @@ function DetalhesContaContent() {
     }
   };
 
-  const [isDeleting, setIsDeleting] = useState(false);
-
   const handleConfirmDelete = async () => {
     if (entryToDelete) {
       setIsDeleting(true);
@@ -135,6 +134,19 @@ function DetalhesContaContent() {
         setIsDeleteConfirmOpen(false);
         setEntryToDelete(null);
       }
+    }
+  };
+
+  const handleTogglePaid = async (entry: Entry) => {
+    try {
+      const nextPaid = entry.isPaid === false ? true : false;
+      await updateEntry(entry.id, { isPaid: nextPaid }, "this");
+      showToast(
+        nextPaid ? "Marcado como pago/recebido!" : "Marcado como pendente.",
+        "success"
+      );
+    } catch {
+      showToast("Erro ao atualizar status.", "error");
     }
   };
 
@@ -217,6 +229,7 @@ function DetalhesContaContent() {
                   setEntryToDelete(e);
                   setIsDeleteConfirmOpen(true);
                 }}
+                onTogglePaid={handleTogglePaid}
               />
             ))
           )}

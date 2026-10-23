@@ -41,6 +41,12 @@ function getUpdateDataFromPayload(
   if (payload.data.date.getTime() !== currentEntry.date.getTime()) {
     nextData.date = payload.data.date;
   }
+  if (payload.data.isPaid !== undefined && payload.data.isPaid !== (currentEntry.isPaid ?? true)) {
+    nextData.isPaid = payload.data.isPaid;
+  }
+  if (payload.data.isShared !== undefined && payload.data.isShared !== (currentEntry.isShared ?? true)) {
+    nextData.isShared = payload.data.isShared;
+  }
 
   const currentDescription = normalizeDescription(currentEntry.description);
   const nextDescription = normalizeDescription(payload.data.description);

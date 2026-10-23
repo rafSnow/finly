@@ -14,6 +14,7 @@ import { useEffect, useMemo, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { CheckCircle2, Clock, Users, User } from "lucide-react";
 
 const entrySchema = z.object({
   type: z.enum(["income", "expense", "transfer"]),
@@ -23,6 +24,8 @@ const entrySchema = z.object({
   categoryId: z.string().optional(),
   dateInput: z.string().min(1, "Informe uma data."),
   description: z.string().max(200, "Máximo de 200 caracteres.").optional(),
+  isPaid: z.boolean(),
+  isShared: z.boolean(),
   repetitionType: z.enum(["none", "recurring", "installment"]),
   recurrenceInterval: z.enum(["weekly", "monthly", "yearly"]).optional(),
   recurrenceCount: z.number().min(2, "Mínimo 2").max(60, "Máximo 60").optional(),
@@ -113,6 +116,8 @@ export function EntryForm({
       categoryId: initialData?.categoryId ?? "",
       dateInput: formatDateInput(initialData?.date ?? new Date()),
       description: initialData?.description ?? "",
+      isPaid: initialData?.isPaid ?? true,
+      isShared: initialData?.isShared ?? true,
       repetitionType: initialData?.isInstallment
         ? "installment"
         : initialData?.isRecurring
@@ -126,6 +131,8 @@ export function EntryForm({
   const type = watch("type");
   const valueInput = watch("valueInput");
   const categoryId = watch("categoryId");
+  const isPaid = watch("isPaid");
+  const isShared = watch("isShared");
   const repetitionType = watch("repetitionType");
   const recurrenceCount = watch("recurrenceCount");
   const description = watch("description") ?? "";
@@ -172,6 +179,8 @@ export function EntryForm({
         categoryId: values.type === "transfer" ? "" : (values.categoryId || ""),
         date: new Date(`${values.dateInput}T00:00:00`),
         description: values.description?.trim(),
+        isPaid: values.isPaid,
+        isShared: values.type === "expense" ? values.isShared : true,
       },
     };
 
@@ -245,6 +254,75 @@ export function EntryForm({
       {errors.valueInput ? <p className="mb-4 text-center text-sm text-red-400">{errors.valueInput.message}</p> : null}
 
       <div className="mb-4 space-y-4 rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
+        {/* Status (Pago vs Pendente) & Divisão (Conjunta vs Individual) */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#A09DC0]">
+              Status
+            </label>
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#1A1A26] p-1">
+              <button
+                type="button"
+                onClick={() => setValue("isPaid", true)}
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                  isPaid
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "text-[#6B6890] hover:text-[#A09DC0]"
+                }`}
+              >
+                <CheckCircle2 size={14} />
+                {type === "income" ? "Recebido" : "Pago"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setValue("isPaid", false)}
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                  !isPaid
+                    ? "bg-amber-500/20 text-amber-400"
+                    : "text-[#6B6890] hover:text-[#A09DC0]"
+                }`}
+              >
+                <Clock size={14} />
+                Pendente
+              </button>
+            </div>
+          </div>
+
+          {type === "expense" && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#A09DC0]">
+                Divisão do Casal
+              </label>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#1A1A26] p-1">
+                <button
+                  type="button"
+                  onClick={() => setValue("isShared", true)}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                    isShared
+                      ? "bg-[#7C3AED]/25 text-[#8B5CF6]"
+                      : "text-[#6B6890] hover:text-[#A09DC0]"
+                  }`}
+                >
+                  <Users size={14} />
+                  Conjunta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue("isShared", false)}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                    !isShared
+                      ? "bg-white/10 text-[#F1F0FF]"
+                      : "text-[#6B6890] hover:text-[#A09DC0]"
+                  }`}
+                >
+                  <User size={14} />
+                  Individual
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <Select
           label={type === "transfer" ? "Conta Origem" : "Conta"}
           {...register("accountId")}

@@ -6,27 +6,32 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Select } from "@/components/ui/Select";
+import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import { useEntries } from "@/hooks/useEntries";
 import { usePeriod } from "@/hooks/usePeriod";
 import { useToast } from "@/hooks/useToast";
-import { formatMonthYear } from "@/lib/utils/format";
+import { formatCurrency, formatMonthYear } from "@/lib/utils/format";
 import { Entry, EntryFilters, RecurringScope } from "@/types";
-import { Plus, FileUp } from "lucide-react";
+import { Plus, FileUp, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function Lancamentos() {
   const router = useRouter();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const { period, setPeriod, mounted } = usePeriod();
   const { month, year } = period;
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "pending">("all");
+  const [scopeFilter, setScopeFilter] = useState<"all" | "mine" | "partner" | "shared" | "personal">("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const { categories, loading: categoriesLoading } = useCategories();
+  const { categories, categoryNameMap, loading: categoriesLoading } = useCategories();
 
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -43,7 +48,7 @@ export default function Lancamentos() {
     [categoryFilter, month, typeFilter, year],
   );
 
-  const { entries, loading, error, deleteEntry } = useEntries(filters);
+  const { entries, loading, error, updateEntry, deleteEntry } = useEntries(filters);
 
   const filteredCategories = useMemo(() => {
     if (typeFilter === "all") {
@@ -69,6 +74,39 @@ export default function Lancamentos() {
     }
   }, [categoryFilter, filteredCategories]);
 
+  const displayedEntries = useMemo(() => {
+    const queryNormalized = searchQuery.trim().toLowerCase();
+
+    return entries.filter((entry) => {
+      const isPaid = entry.isPaid ?? true;
+      if (statusFilter === "paid" && !isPaid) return false;
+      if (statusFilter === "pending" && isPaid) return false;
+
+      if (scopeFilter === "mine" && entry.ownerId !== user?.uid) return false;
+      if (scopeFilter === "partner" && entry.ownerId === user?.uid) return false;
+      if (scopeFilter === "shared" && entry.isShared === false) return false;
+      if (scopeFilter === "personal" && entry.isShared !== false) return false;
+
+      if (queryNormalized) {
+        const desc = (entry.description ?? "").toLowerCase();
+        const catName = (categoryNameMap.get(entry.categoryId) ?? "").toLowerCase();
+        if (!desc.includes(queryNormalized) && !catName.includes(queryNormalized)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [entries, statusFilter, scopeFilter, searchQuery, user?.uid, categoryNameMap]);
+
+  const pendingExpenseTotal = useMemo(
+    () =>
+      displayedEntries
+        .filter((e) => e.type === "expense" && !e.isTransfer && e.isPaid === false)
+        .reduce((sum, e) => sum + e.value, 0),
+    [displayedEntries],
+  );
+
   const goPreviousMonth = () => {
     const date = new Date(year, month - 2, 1);
     setPeriod({ month: date.getMonth() + 1, year: date.getFullYear() });
@@ -81,6 +119,19 @@ export default function Lancamentos() {
 
   const handleEdit = (entry: Entry) => {
     router.push(`/lancamentos/editar?id=${entry.id}`);
+  };
+
+  const handleTogglePaid = async (entry: Entry) => {
+    const nextPaid = !(entry.isPaid ?? true);
+    try {
+      await updateEntry(entry.id, { isPaid: nextPaid }, "this");
+      showToast(
+        nextPaid ? "Marcado como pago/recebido!" : "Marcado como pendente.",
+        "success",
+      );
+    } catch {
+      showToast("Não foi possível atualizar o status.", "error");
+    }
   };
 
   const handleDeleteClick = (entry: Entry) => {
@@ -160,6 +211,18 @@ export default function Lancamentos() {
           </button>
         </div>
 
+        {/* Busca por texto */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B6890]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por descrição ou categoria..."
+            className="w-full rounded-xl border border-white/8 bg-[#1A1A26] py-2.5 pl-10 pr-4 text-sm text-[#F1F0FF] outline-none transition-colors placeholder:text-[#6B6890] focus:border-[#7C3AED]"
+          />
+        </div>
+
         <div className="grid grid-cols-3 rounded-xl bg-[#1A1A26] p-1">
           <button
             type="button"
@@ -196,19 +259,54 @@ export default function Lancamentos() {
           </button>
         </div>
 
-        <Select
-          label="Categoria"
-          value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value)}
-          disabled={categoriesLoading}
-          options={[
-            { value: "all", label: "Todas" },
-            ...filteredCategories.map((category) => ({
-              value: category.id,
-              label: category.name,
-            })),
-          ]}
-        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Select
+            label="Categoria"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            disabled={categoriesLoading}
+            options={[
+              { value: "all", label: "Todas" },
+              ...filteredCategories.map((category) => ({
+                value: category.id,
+                label: category.name,
+              })),
+            ]}
+          />
+
+          <Select
+            label="Status"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as "all" | "paid" | "pending")}
+            options={[
+              { value: "all", label: "Todos" },
+              { value: "paid", label: "Pagos / Recebidos" },
+              { value: "pending", label: "Pendentes" },
+            ]}
+          />
+
+          <Select
+            label="Visão do Casal"
+            value={scopeFilter}
+            onChange={(event) =>
+              setScopeFilter(event.target.value as "all" | "mine" | "partner" | "shared" | "personal")
+            }
+            options={[
+              { value: "all", label: "Todos os lançamentos" },
+              { value: "mine", label: "Apenas meus" },
+              { value: "partner", label: "Apenas do parceiro" },
+              { value: "shared", label: "Despesas Conjuntas" },
+              { value: "personal", label: "Despesas Individuais" },
+            ]}
+          />
+        </div>
+
+        {pendingExpenseTotal > 0 && (
+          <div className="flex items-center justify-between rounded-xl bg-amber-500/10 px-3.5 py-2 text-xs text-amber-300">
+            <span>Despesas pendentes neste filtro:</span>
+            <strong className="font-semibold">{formatCurrency(pendingExpenseTotal)}</strong>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -220,7 +318,7 @@ export default function Lancamentos() {
       ) : null}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      {!loading && entries.length === 0 ? (
+      {!loading && displayedEntries.length === 0 ? (
         <EmptyState
           title="Nenhum lançamento neste período"
           description="Adicione receitas ou despesas para acompanhar seu saldo"
@@ -231,12 +329,13 @@ export default function Lancamentos() {
         />
       ) : null}
 
-      {!loading && entries.length > 0 ? (
+      {!loading && displayedEntries.length > 0 ? (
         <EntryList
-          entries={entries}
+          entries={displayedEntries}
           categories={categories}
           onEdit={handleEdit}
           onDelete={handleDeleteClick}
+          onTogglePaid={handleTogglePaid}
         />
       ) : null}
 

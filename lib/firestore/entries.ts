@@ -67,6 +67,8 @@ function mapEntryDoc(id: string, data: Record<string, unknown>): Entry {
     isTransfer: Boolean(data.isTransfer),
     transferId: (data.transferId as string | undefined) ?? undefined,
     destinationAccountId: (data.destinationAccountId as string | undefined) ?? undefined,
+    isPaid: data.isPaid === undefined ? true : Boolean(data.isPaid),
+    isShared: data.isShared === undefined ? true : Boolean(data.isShared),
     createdAt: mapTimestampDate(data.createdAt),
   };
 }
@@ -132,6 +134,12 @@ function sanitizePartialEntry(
   }
   if (typeof data.isCredit === "boolean") {
     sanitized.isCredit = data.isCredit;
+  }
+  if (typeof data.isPaid === "boolean") {
+    sanitized.isPaid = data.isPaid;
+  }
+  if (typeof data.isShared === "boolean") {
+    sanitized.isShared = data.isShared;
   }
 
   return sanitized;
@@ -244,6 +252,8 @@ export async function createEntry(
       isRecurring: false,
       isCredit,
       isTransfer: data.type === "transfer",
+      isPaid: data.isPaid ?? true,
+      isShared: data.isShared ?? true,
       createdAt: serverTimestamp(),
     });
   } catch (error) {
@@ -277,12 +287,18 @@ export async function createRecurringEntries(
     const baseInstallmentCents = isInstallment ? Math.floor(totalCents / count) : totalCents;
     const remainderCents = isInstallment ? totalCents - baseInstallmentCents * count : 0;
 
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
     for (let i = 0; i < count; i += 1) {
       const nextDate = addInterval(data.date, interval, i);
       const entryRef = doc(collection(db, "families", familyId, "entries"));
       const entryValue = isInstallment
         ? (baseInstallmentCents + (i === 0 ? remainderCents : 0)) / 100
         : data.value;
+
+      const isPaidForOccurrence =
+        i === 0 ? (data.isPaid ?? nextDate <= endOfToday) : false;
 
       batch.set(entryRef, {
         familyId,
@@ -301,6 +317,8 @@ export async function createRecurringEntries(
         installmentCount: isInstallment ? count : null,
         isCredit,
         isTransfer: data.type === "transfer",
+        isPaid: isPaidForOccurrence,
+        isShared: data.isShared ?? true,
         createdAt: serverTimestamp(),
       });
     }
@@ -444,7 +462,6 @@ export async function addEntriesBatch(
   const batch = writeBatch(db);
   const entriesRef = collection(db, "families", familyId, "entries");
 
-  // O Firestore suporta ate 500 operacoes por batch, o que atende bem extratos
   entries.forEach((data) => {
     const newDocRef = doc(entriesRef);
     batch.set(newDocRef, {
@@ -458,6 +475,8 @@ export async function addEntriesBatch(
       description: data.description?.trim() || "",
       isRecurring: false,
       isCredit: !!data.isCredit,
+      isPaid: data.isPaid ?? true,
+      isShared: data.isShared ?? true,
       createdAt: serverTimestamp(),
     });
   });

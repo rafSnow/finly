@@ -44,7 +44,6 @@ export async function getWealthTracking(familyId: string): Promise<{
 
   // 2. To build a 6-month history, we need entries from the last 5 months
   // We walk backwards from current balances.
-  const history: WealthHistory[] = [];
   const now = new Date();
   
   // Create an array of the last 6 months (including current)

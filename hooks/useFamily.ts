@@ -5,6 +5,7 @@ import {
   createFamily,
   getFamilyByMember,
   removeMemberFromFamily,
+  updateFamilySplitMethod,
 } from "@/lib/firestore/families";
 import {
   acceptInvite as acceptInviteService,
@@ -15,7 +16,7 @@ import {
   getInviteByEmail,
 } from "@/lib/firestore/invites";
 import { db } from "@/lib/firebase";
-import { Family, Invite } from "@/types";
+import { Invite, SplitMethod } from "@/types";
 import {
   collection,
   doc,
@@ -168,6 +169,14 @@ export function useFamily() {
     onSuccess: invalidateContext,
   });
 
+  const updateSplitMethodMutation = useMutation({
+    mutationFn: async (splitMethod: SplitMethod) => {
+      if (!data?.family?.id) throw new Error("Família não encontrada.");
+      await updateFamilySplitMethod(data.family.id, splitMethod);
+    },
+    onSuccess: invalidateContext,
+  });
+
   return {
     family: data?.family ?? null,
     partner: data?.partner ?? null,
@@ -179,6 +188,8 @@ export function useFamily() {
     removePartner: async () => removePartnerMutation.mutateAsync(),
     cancelPendingInvite: async () => cancelPendingInviteMutation.mutateAsync(),
     declineReceivedInvite: async () => declineReceivedInviteMutation.mutateAsync(),
+    updateSplitMethod: async (splitMethod: SplitMethod) =>
+      updateSplitMethodMutation.mutateAsync(splitMethod),
     refresh: refetch,
   };
 }

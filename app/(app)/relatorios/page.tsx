@@ -132,7 +132,7 @@ export default function RelatoriosPage() {
                   <Tooltip 
                     contentStyle={{ backgroundColor: "#111118", borderColor: "#ffffff10", borderRadius: "8px" }}
                     itemStyle={{ fontSize: "14px", fontWeight: 500 }}
-                    formatter={(value: any) => formatCurrency(Number(value) || 0)}
+                    formatter={(value) => formatCurrency(Number(value) || 0)}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
                   <Line 

@@ -33,7 +33,7 @@ export function useAlerts() {
 
     const newAlerts: Alert[] = [];
 
-    // 1. Verificar Despesas Próximas (Até 3 dias)
+    // 1. Verificar Despesas Pendentes (Vencidas ou Próximas em até 3 dias)
     const threeDaysFromNow = new Date();
     threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
     threeDaysFromNow.setHours(23, 59, 59, 999);
@@ -41,29 +41,39 @@ export function useAlerts() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const upcomingExpenses = entries.filter((entry) => {
-      if (entry.type !== "expense") return false;
-      const entryDate = new Date(entry.date);
-      return entryDate >= today && entryDate <= threeDaysFromNow;
-    });
+    const pendingExpenses = entries.filter(
+      (entry) => entry.type === "expense" && !entry.isTransfer && entry.isPaid === false,
+    );
 
-    upcomingExpenses.forEach((expense) => {
+    pendingExpenses.forEach((expense) => {
       const entryDate = new Date(expense.date);
-      const diffTime = entryDate.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      entryDate.setHours(0, 0, 0, 0);
 
-      let dayText = "";
-      if (diffDays === 0) dayText = "hoje";
-      else if (diffDays === 1) dayText = "amanhã";
-      else dayText = `em ${diffDays} dias`;
+      if (entryDate < today) {
+        newAlerts.push({
+          id: `overdue-${expense.id}`,
+          type: "danger",
+          title: "Despesa Pendente Vencida",
+          description: `${expense.description || categoryNameMap.get(expense.categoryId) || "Lançamento"} está pendente de pagamento.`,
+          date: expense.date,
+        });
+      } else if (entryDate <= threeDaysFromNow) {
+        const diffTime = entryDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      newAlerts.push({
-        id: `upcoming-${expense.id}`,
-        type: "warning",
-        title: "Despesa Próxima",
-        description: `${expense.description || "Lançamento"} vence ${dayText}.`,
-        date: expense.date,
-      });
+        let dayText = "";
+        if (diffDays === 0) dayText = "hoje";
+        else if (diffDays === 1) dayText = "amanhã";
+        else dayText = `em ${diffDays} dias`;
+
+        newAlerts.push({
+          id: `upcoming-${expense.id}`,
+          type: "warning",
+          title: "Despesa Próxima",
+          description: `${expense.description || categoryNameMap.get(expense.categoryId) || "Lançamento"} vence ${dayText}.`,
+          date: expense.date,
+        });
+      }
     });
 
     // 2. Verificar Metas Atingindo 80% ou 100%

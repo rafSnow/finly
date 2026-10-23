@@ -1,5 +1,6 @@
 export type RecurrenceInterval = "weekly" | "monthly" | "yearly";
 export type RecurringScope = "this" | "this_and_following" | "all";
+export type SplitMethod = "50_50" | "proportional";
 
 export interface EntryFilters {
   month: number;
@@ -16,6 +17,8 @@ export interface CreateEntryInput {
   destinationAccountId?: string;
   date: Date;
   description?: string;
+  isPaid?: boolean;
+  isShared?: boolean;
 }
 
 export interface PeriodFilter {
@@ -27,6 +30,11 @@ export interface DashboardSummary {
   totalIncome: number;
   totalExpense: number;
   balance: number;
+  paidIncome?: number;
+  paidExpense?: number;
+  pendingIncome?: number;
+  pendingExpense?: number;
+  realizedBalance?: number;
 }
 
 export interface CategoryBreakdown {
@@ -42,6 +50,9 @@ export interface PartnerSummary {
   totalIncome: number;
   totalExpense: number;
   expenseContribution: number;
+  sharedExpensePaid?: number;
+  personalExpensePaid?: number;
+  incomeContribution?: number;
 }
 
 export interface CreateGoalInput {
@@ -59,6 +70,7 @@ export interface User {
 export interface Family {
   id: string;
   memberIds: string[];
+  splitMethod?: SplitMethod;
   createdAt: Date;
   createdBy: string;
 }
@@ -82,6 +94,8 @@ export interface Entry {
   isCredit?: boolean;
   isTransfer?: boolean;
   transferId?: string;
+  isPaid?: boolean;
+  isShared?: boolean;
   createdAt: Date;
 }
 
@@ -124,4 +138,3 @@ export interface Account {
   dueDay?: number;
   createdAt: Date;
 }
-

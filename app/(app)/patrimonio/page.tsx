@@ -83,7 +83,7 @@ export default function PatrimonioPage() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1A1A26', borderColor: '#ffffff1a', borderRadius: '12px' }}
                 itemStyle={{ color: '#F1F0FF' }}
-                formatter={(value: any) => [formatCurrency(Number(value) || 0), '']}
+                formatter={(value) => [formatCurrency(Number(value) || 0), '']}
                 labelStyle={{ color: '#A09DC0', marginBottom: '8px' }}
               />
               <Area

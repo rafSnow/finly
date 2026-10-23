@@ -10,14 +10,14 @@ const containerVariants = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
+  show: { opacity: 1, y: 0 },
 };
 
 interface EntryListProps {
@@ -25,6 +25,7 @@ interface EntryListProps {
   categories: Category[];
   onEdit: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
+  onTogglePaid?: (entry: Entry) => void;
 }
 
 function dateGroupKey(date: Date): string {
@@ -40,7 +41,7 @@ function formatGroupLabel(key: string): string {
   return formatShortDate(date);
 }
 
-export function EntryList({ entries, categories, onEdit, onDelete }: EntryListProps) {
+export function EntryList({ entries, categories, onEdit, onDelete, onTogglePaid }: EntryListProps) {
   const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
 
   const grouped = entries.reduce<Record<string, Entry[]>>((acc, entry) => {
@@ -55,7 +56,7 @@ export function EntryList({ entries, categories, onEdit, onDelete }: EntryListPr
   const orderedKeys = Object.keys(grouped).sort((a, b) => (a > b ? -1 : 1));
 
   return (
-    <motion.div 
+    <motion.div
       className="space-y-3"
       variants={containerVariants}
       initial="hidden"
@@ -74,6 +75,7 @@ export function EntryList({ entries, categories, onEdit, onDelete }: EntryListPr
                 categoryName={categoryMap.get(entry.categoryId) ?? "Categoria"}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onTogglePaid={onTogglePaid}
               />
             ))}
           </div>
